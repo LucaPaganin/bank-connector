@@ -1,0 +1,13 @@
+{
+  "application_id": "your-enable-banking-application-uuid",
+  "pem_path": "./private.pem",
+  "redirect_url": "http://localhost:3000/callback",
+  "account_holder_name": "Your Name",
+  "actual": {
+    "url": "http://localhost:5006",
+    "password": "your-actual-budget-password",
+    "encryption_password": null,
+    "sync_id": "your-budget-sync-id"
+  },
+  "accounts": []
+}
