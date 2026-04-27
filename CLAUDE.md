@@ -8,18 +8,17 @@ Sync logic was extracted and stripped down from `../bridge-bank/` (MIT + Commons
 
 ## Stack
 
-- Python 3.9+
+- Python 3.13+
+- `uv` for package management (`uv sync` to install, `uv run python connector.py` to run)
 - `flask` for the OAuth callback + manual sync trigger
 - `actualpy` for Actual Budget client
 - `PyJWT[crypto]` + `cryptography` for the RS256 JWT used to authenticate to Enable Banking
 - `requests` for everything HTTP
 
-No package manager configured — plain `pip install -r requirements.txt`.
-
 ## Entry point
 
 ```bash
-python connector.py
+uv run python connector.py
 ```
 
 Starts a Flask server on `127.0.0.1:3000` and a daemon thread running `scheduler_loop()` (24 h cadence by default).
@@ -33,6 +32,9 @@ Starts a Flask server on `127.0.0.1:3000` and a daemon thread running `scheduler
 | File | Role |
 |---|---|
 | `connector.py` | Everything — Flask app, JWT auth, transaction fetch, parsing, sync, scheduler |
+| `pyproject.toml` | Project metadata and dependencies |
+| `uv.lock` | Locked dependency graph |
+| `.python-version` | Pinned Python version (3.13) |
 | `accounts.json` | Config: Application ID, PEM path, Actual Budget creds, list of connected accounts. Created from `accounts.example.json`. |
 | `state.json` | Per-account `last_sync_date` / `imported_refs` / `pending_map`, plus transient `pending_oauth` keyed by OAuth state UUID |
 | `private.pem` | Enable Banking RS256 private key (user-supplied, gitignored) |

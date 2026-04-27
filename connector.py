@@ -6,9 +6,9 @@ Single-process Flask app:
   • HTTP endpoints handle the bank OAuth flow and manual sync triggers.
 
 Files used (all in this directory):
-  accounts.json   — config (created from accounts.example.json)
-  state.json      — sync state (auto-created)
-  private.pem     — Enable Banking RS256 private key (you supply)
+  accounts.json   - config (created from accounts.example.json)
+  state.json      - sync state (auto-created)
+  private.pem     - Enable Banking RS256 private key (you supply)
 """
 import os
 import sys
@@ -42,7 +42,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("connector")
 
 # ----------------------------------------------------------------------------
-# actualpy patch — required for Actual Budget >= 26.3.0
+# actualpy patch - required for Actual Budget >= 26.3.0
 # Bug: apply_change passes Column objects in ON CONFLICT SET, producing
 # table-qualified names that SQLite rejects. Convert keys to plain strings.
 # ----------------------------------------------------------------------------
@@ -96,7 +96,7 @@ def _redirect_url() -> str:
     return cfg.get("redirect_url") or f"http://localhost:{PORT}/callback"
 
 # ----------------------------------------------------------------------------
-# Enable Banking — JWT auth + endpoints
+# Enable Banking - JWT auth + endpoints
 # ----------------------------------------------------------------------------
 def _eb_headers() -> dict:
     cfg = load_config()
@@ -547,7 +547,7 @@ def manual_sync():
 # ----------------------------------------------------------------------------
 if __name__ == "__main__":
     if not CONFIG_FILE.exists():
-        log.error("Missing %s — copy accounts.example.json and fill in your details.", CONFIG_FILE)
+        log.error("Missing %s - copy accounts.example.json and fill in your details.", CONFIG_FILE)
         sys.exit(1)
     threading.Thread(target=scheduler_loop, daemon=True).start()
     app.run(host=HOST, port=PORT)

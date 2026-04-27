@@ -1,5 +1,0 @@
-flask
-requests
-PyJWT[crypto]
-cryptography
-actualpy

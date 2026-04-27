@@ -13,12 +13,14 @@ This is a stripped-down reimplementation of the core sync logic from [bridge-ban
 ```
 bank-connector/
 ├── connector.py            # everything: Flask, sync loop, parsing, Actual Budget client
+├── pyproject.toml          # project metadata and dependencies
+├── uv.lock                 # locked dependency graph
+├── .python-version         # pinned Python version (3.13)
 ├── accounts.example.json   # config template
 ├── accounts.json           # your config (gitignored — create from the template)
 ├── private.pem             # your Enable Banking RS256 key (gitignored)
 ├── state.json              # auto-created sync state (gitignored)
-├── actual-cache/           # auto-created actualpy local replica
-└── requirements.txt
+└── actual-cache/           # auto-created actualpy local replica
 ```
 
 ---
@@ -28,10 +30,10 @@ bank-connector/
 ### 1. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
-Requires Python 3.9+.
+Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
 
 ### 2. Get an Enable Banking application
 
@@ -63,7 +65,7 @@ Edit `accounts.json` and fill in:
 ### 4. Run
 
 ```bash
-python connector.py
+uv run python connector.py
 ```
 
 The Flask app starts on `127.0.0.1:3000`. The background sync thread fires immediately, then every 24 hours. Adjust the interval by changing `SYNC_INTERVAL_HOURS` at the top of `connector.py`.
