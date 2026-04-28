@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:enablebanking.com)",
       "WebFetch(domain:cdn.enablebanking.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(uv run *)"
     ]
   }
 }
