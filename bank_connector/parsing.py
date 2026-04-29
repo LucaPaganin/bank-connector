@@ -19,7 +19,7 @@ class ParsedTransaction:
 
     @property
     def key(self) -> str:
-        """Date|amount key used for pending → booked dedup."""
+        """Date|amount key used for pending -> booked dedup."""
         return f"{self.date}|{self.amount}"
 
 

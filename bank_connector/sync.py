@@ -1,6 +1,6 @@
 """Sync service.
 
-`AccountSyncer` handles one account end-to-end: fetch → parse → reconcile into
+`AccountSyncer` handles one account end-to-end: fetch -> parse -> reconcile into
 Actual Budget, applying the two-layer dedup rules (booked refs + pending map).
 
 `SyncService` runs the orchestrator across all configured accounts on a
@@ -56,7 +56,7 @@ class AccountSyncer:
         account_id = str(account["id"])
         account_uid = account["account_uid"]
         actual_name = account["actual_account"]
-        label = f"{account.get('bank_name', 'Bank')} → {actual_name}"
+        label = f"{account.get('bank_name', 'Bank')} -> {actual_name}"
 
         accounts_state = state.setdefault("accounts", {})
         acct_state = accounts_state.get(account_id, {})
@@ -244,7 +244,7 @@ class AccountSyncer:
         if parsed.ref and parsed.ref in imported_refs:
             return _ImportOutcome(skipped=1)
 
-        # Pending → booked: mark cleared, drop from pending_map.
+        # Pending -> booked: mark cleared, drop from pending_map.
         if parsed.key in pending_map:
             txn_id = pending_map[parsed.key]
             existing_txn = next((t for t in existing if str(t.id) == txn_id), None)

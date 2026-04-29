@@ -100,7 +100,7 @@ To find supported banks: `GET /banks` returns the full list of names and country
 
 ```
 Enable Banking
-  │  JWT (RS256, 1-hour exp) → Bearer token on every request
+  │  JWT (RS256, 1-hour exp) -> Bearer token on every request
   │
   │  GET /accounts/<uid>/transactions  (paginated, rate-limit aware)
   ▼
@@ -109,14 +109,14 @@ parse  (date · amount sign from credit_debit_indicator · payee with self-trans
   ▼
 dedup
   │  imported_refs: set of entry_reference / transaction_id (settled txns)
-  │  pending_map:   "<date>|<amount>" → Actual Budget txn UUID (PDNG txns)
+  │  pending_map:   "<date>|<amount>" -> Actual Budget txn UUID (PDNG txns)
   │                 when a booked txn matches a pending key, the existing
   │                 record is marked cleared rather than re-imported
   ▼
 actualpy
   │  reconcile_transaction or create_transaction
   │  + run_rules with two patches:
-  │      payee_name → description           (otherwise rules fail validation)
+  │      payee_name -> description           (otherwise rules fail validation)
   │      restore SET-notes original casing  (actualpy lowercases values)
   ▼
 Actual Budget

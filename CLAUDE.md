@@ -25,7 +25,7 @@ Starts a Flask server on `127.0.0.1:3000` and a daemon thread running `scheduler
 
 ## Architecture in one line
 
-`Flask /connect` → `EnableBankingClient.start_auth` → bank OAuth → `Flask /callback` → `EnableBankingClient.complete_auth` → append to `accounts.json` → `SyncService.scheduler_loop` → `SyncService.run` → `AccountSyncer.sync` (per account: `fetch_transactions` → `parse_transaction` → dedup via `imported_refs` + `pending_map` → `actualpy reconcile_transaction` / `create_transaction` → `run_rules`).
+`Flask /connect` -> `EnableBankingClient.start_auth` -> bank OAuth -> `Flask /callback` -> `EnableBankingClient.complete_auth` -> append to `accounts.json` -> `SyncService.scheduler_loop` -> `SyncService.run` -> `AccountSyncer.sync` (per account: `fetch_transactions` -> `parse_transaction` -> dedup via `imported_refs` + `pending_map` -> `actualpy reconcile_transaction` / `create_transaction` -> `run_rules`).
 
 ## File map
 
@@ -67,7 +67,7 @@ Starts a Flask server on `127.0.0.1:3000` and a daemon thread running `scheduler
 - **Two-layer dedup is intentional.** `imported_refs` skips already-seen settled transactions by Enable Banking's `entry_reference` / `transaction_id`. `pending_map` (keyed by `"<date>|<amount>"` via `ParsedTransaction.key`) handles the case where a transaction first appears as `PDNG` and later as `BOOK` — the existing pending record is marked `cleared` instead of a duplicate booked record being created. The two import paths live in `AccountSyncer._import_pending` / `_import_booked`. Don't simplify either side without breaking duplicate handling.
 - **Three actualpy compatibility shims** in `actual_patches.py`, all silently fail-soft if actualpy changes:
   - `patch_actualpy()` rewrites `actual.database.apply_change` to coerce SQLAlchemy `Column` keys to plain strings in the ON CONFLICT SET clause. Required on Actual Budget ≥ 26.3.0. Called eagerly from `bank_connector/__init__.py` on package import.
-  - `patch_payee_name_rules(session)` remaps `payee_name` → `description` and `imported_payee` → `imported_description` in rule action JSON before `run_rules`. Without this, Pydantic validation fails inside actualpy and no rules apply.
+  - `patch_payee_name_rules(session)` remaps `payee_name` -> `description` and `imported_payee` -> `imported_description` in rule action JSON before `run_rules`. Without this, Pydantic validation fails inside actualpy and no rules apply.
   - `fix_rule_note_casing(session, transactions)` re-uppers transaction notes after `run_rules` because actualpy normalises SET-action values to lowercase via `get_normalized_string()`.
 - **The OAuth `state` UUID is the dedup key for `pending_oauth`.** It's persisted to `state.json` so a restart between `/connect` and `/callback` doesn't lose the in-flight request. Don't move that to in-memory state.
 - **Multi-account banks.** A single bank OAuth can return several accounts. The current behavior maps all of them to the same `actual_account` from the `/connect` request — the `/callback` response tells the user to edit `accounts.json` afterwards if they want different mappings. Don't add a picker UI; the design choice is to keep the surface tiny.

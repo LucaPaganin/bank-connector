@@ -4,7 +4,8 @@
       "WebFetch(domain:enablebanking.com)",
       "WebFetch(domain:cdn.enablebanking.com)",
       "WebSearch",
-      "Bash(uv run *)"
+      "Bash(uv run *)",
+      "Bash(uv sync *)"
     ]
   }
 }

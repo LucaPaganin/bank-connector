@@ -4,8 +4,8 @@ Three monkey-patches that all silently fail-soft if actualpy changes shape:
 
 * `patch_actualpy()` rewrites `actual.database.apply_change` so the SQLite
   ON-CONFLICT SET clause uses plain string keys (Actual Budget >= 26.3.0).
-* `patch_payee_name_rules(session)` remaps `payee_name` → `description` and
-  `imported_payee` → `imported_description` in stored rule JSON, so actualpy's
+* `patch_payee_name_rules(session)` remaps `payee_name` -> `description` and
+  `imported_payee` -> `imported_description` in stored rule JSON, so actualpy's
   Pydantic validation accepts them before `run_rules`.
 * `fix_rule_note_casing(session, transactions)` restores the original case of
   notes set by SET-action rules (actualpy lowercases them).

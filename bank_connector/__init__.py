@@ -1,4 +1,4 @@
-"""Enable Banking → Actual Budget connector.
+"""Enable Banking -> Actual Budget connector.
 
 Importing this package applies the actualpy compatibility patch eagerly so any
 later `from actual import ...` sees the patched module.
