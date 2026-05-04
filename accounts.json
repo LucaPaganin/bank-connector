@@ -1,5 +1,5 @@
 {
-  "application_id": "a4baeda8-2fbd-484e-8ec1-08ab776abfad",
+  "application_id": "46937639-5975-4f23-8069-b9a9165c3a13",
   "pem_path": "./private.pem",
   "redirect_url": "https://sukuna.cormorant-bleak.ts.net:3000/callback",
   "account_holder_name": "Luca Paganin",
@@ -9,5 +9,50 @@
     "encryption_password": null,
     "sync_id": "your-budget-sync-id"
   },
-  "accounts": []
+  "accounts": [
+    {
+      "id": 1,
+      "session_id": "3b353271-931f-4bef-888e-83d554ad25c2",
+      "account_uid": "eccb6b70-f736-4413-a7ed-a16265508889",
+      "bank_name": "Revolut",
+      "country": "IT",
+      "actual_account": "test",
+      "start_sync_date": "2026-05-04",
+      "session_expiry": "2026-10-31T20:42:38Z",
+      "skip_pending": false
+    },
+    {
+      "id": 2,
+      "session_id": "3b353271-931f-4bef-888e-83d554ad25c2",
+      "account_uid": "777e98b3-c3c3-4d88-99b5-e444f93c2670",
+      "bank_name": "Revolut",
+      "country": "IT",
+      "actual_account": "test",
+      "start_sync_date": "2026-05-04",
+      "session_expiry": "2026-10-31T20:42:38Z",
+      "skip_pending": false
+    },
+    {
+      "id": 3,
+      "session_id": "3b353271-931f-4bef-888e-83d554ad25c2",
+      "account_uid": "72da41be-6ed8-4ddd-90c8-d7f2da47bd6f",
+      "bank_name": "Revolut",
+      "country": "IT",
+      "actual_account": "test",
+      "start_sync_date": "2026-05-04",
+      "session_expiry": "2026-10-31T20:42:38Z",
+      "skip_pending": false
+    },
+    {
+      "id": 4,
+      "session_id": "3b353271-931f-4bef-888e-83d554ad25c2",
+      "account_uid": "90460a8f-9578-40f1-8599-2369b269beb7",
+      "bank_name": "Revolut",
+      "country": "IT",
+      "actual_account": "test",
+      "start_sync_date": "2026-05-04",
+      "session_expiry": "2026-10-31T20:42:38Z",
+      "skip_pending": false
+    }
+  ]
 }

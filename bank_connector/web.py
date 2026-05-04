@@ -133,6 +133,28 @@ def create_app(
             }
         )
 
+    @app.get("/transactions/<int:account_id>")
+    def list_transactions(account_id: int):
+        """Return raw transactions for a connected account.
+
+        Optional query params:
+          date_from=YYYY-MM-DD  (defaults to 30 days ago)
+        """
+        cfg = config_repo.load()
+        account = next((a for a in cfg.get("accounts", []) if a["id"] == account_id), None)
+        if not account:
+            abort(404, f"No account with id={account_id}")
+        date_from_str = request.args.get("date_from")
+        if date_from_str:
+            try:
+                date_from = datetime.date.fromisoformat(date_from_str)
+            except ValueError:
+                abort(400, "date_from must be YYYY-MM-DD")
+        else:
+            date_from = datetime.date.today() - datetime.timedelta(days=30)
+        txns = eb_client.fetch_transactions(account["account_uid"], date_from)
+        return jsonify({"account_id": account_id, "date_from": date_from.isoformat(), "count": len(txns), "transactions": txns})
+
     @app.post("/sync")
     def manual_sync():
         threading.Thread(target=sync_service.run, daemon=True).start()
