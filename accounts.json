@@ -1,0 +1,13 @@
+{
+  "application_id": "a4baeda8-2fbd-484e-8ec1-08ab776abfad",
+  "pem_path": "./private.pem",
+  "redirect_url": "https://sukuna.cormorant-bleak.ts.net:3000/callback",
+  "account_holder_name": "Luca Paganin",
+  "actual": {
+    "url": "http://localhost:5006",
+    "password": "your-actual-budget-password",
+    "encryption_password": null,
+    "sync_id": "your-budget-sync-id"
+  },
+  "accounts": []
+}

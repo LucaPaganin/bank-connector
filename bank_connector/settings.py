@@ -11,9 +11,11 @@ CONFIG_FILE = ROOT / "accounts.json"
 STATE_FILE = ROOT / "state.json"
 PEM_DEFAULT = ROOT / "private.pem"
 ACTUAL_DATA_DIR = ROOT / "actual-cache"
+SSL_CRT_FILE = ROOT / "sukuna.cormorant-bleak.ts.net.crt"
+SSL_KEY_FILE = ROOT / "sukuna.cormorant-bleak.ts.net.key"
 
 EB_API = "https://api.enablebanking.com"
-HOST = "127.0.0.1"
+HOST = "0.0.0.0"
 PORT = 3000
 SYNC_INTERVAL_HOURS = 24
 

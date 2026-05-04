@@ -5,7 +5,11 @@
       "WebFetch(domain:cdn.enablebanking.com)",
       "WebSearch",
       "Bash(uv run *)",
-      "Bash(uv sync *)"
+      "Bash(uv sync *)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:pypi.org)"
     ]
   }
 }

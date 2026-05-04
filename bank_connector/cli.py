@@ -15,6 +15,8 @@ from bank_connector.settings import (
     PEM_DEFAULT,
     PORT,
     STATE_FILE,
+    SSL_CRT_FILE,
+    SSL_KEY_FILE,
     default_redirect_url,
 )
 from bank_connector.storage import ConfigRepository, StateRepository
@@ -56,7 +58,11 @@ def main() -> None:
         eb_client=eb_client,
         sync_service=sync_service,
     )
-    app.run(host=HOST, port=PORT)
+    app.run(
+        host=HOST, 
+        port=PORT,
+        ssl_context=(SSL_CRT_FILE, SSL_KEY_FILE)
+    )
 
 
 if __name__ == "__main__":
