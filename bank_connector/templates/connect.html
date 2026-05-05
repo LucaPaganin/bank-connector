@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Connect Bank — Bank Connector</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f5f5f5; color: #222; }
+  .container { max-width: 480px; margin: 2rem auto; padding: 0 1rem; }
+  a.back { font-size: 0.85rem; color: #6b7280; text-decoration: none; display: inline-block; margin-bottom: 1.25rem; }
+  a.back:hover { color: #222; }
+  h1 { font-size: 1.4rem; margin-bottom: 1.5rem; }
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 1.5rem 1.75rem; }
+  label { display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-top: 1.1rem; margin-bottom: 0.3rem; }
+  label:first-of-type { margin-top: 0; }
+  input, select {
+    width: 100%; padding: 0.5rem 0.65rem; border: 1px solid #d1d5db;
+    border-radius: 4px; font-size: 0.875rem; font-family: inherit; background: #fff;
+  }
+  input:focus, select:focus {
+    outline: none; border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+  }
+  .hint { font-size: 0.75rem; color: #6b7280; margin-top: 0.3rem; }
+  .banks-status { font-size: 0.75rem; color: #9ca3af; margin-top: 0.3rem; min-height: 1rem; }
+  .btn {
+    display: block; width: 100%; margin-top: 1.75rem;
+    padding: 0.6rem; background: #2563eb; color: #fff;
+    border: none; border-radius: 4px; cursor: pointer;
+    font-size: 0.875rem; font-family: inherit; font-weight: 600;
+  }
+  .btn:hover { background: #1d4ed8; }
+  .btn:disabled { background: #93c5fd; cursor: default; }
+</style>
+</head>
+<body>
+<div class="container">
+  <a class="back" href="/">← Dashboard</a>
+  <h1>Connect New Bank</h1>
+  <div class="card">
+    <form method="get" action="/connect">
+
+      <label for="bank_name">Bank name</label>
+      <input type="text" id="bank_name" name="bank_name" list="banks-dl"
+             autocomplete="off" required placeholder="e.g. Revolut">
+      <datalist id="banks-dl"></datalist>
+      <p class="banks-status" id="banks-status">Loading bank list…</p>
+
+      <label for="country">Country</label>
+      <input type="text" id="country" name="country" maxlength="2"
+             required placeholder="e.g. IT" style="text-transform:uppercase">
+      <p class="hint">2-letter ISO country code — auto-filled when you pick a bank above.</p>
+
+      <label for="actual_account">Actual Budget account name</label>
+      <input type="text" id="actual_account" name="actual_account"
+             required placeholder="e.g. Revolut">
+      <p class="hint">Must match an existing account name in your Actual Budget file.</p>
+
+      <label for="start_sync_date">Start sync date</label>
+      <input type="date" id="start_sync_date" name="start_sync_date" value="{{ today }}">
+      <p class="hint">Transactions before this date will not be imported.</p>
+
+      <label for="psu_type">Account type</label>
+      <select id="psu_type" name="psu_type">
+        <option value="personal">Personal</option>
+        <option value="business">Business</option>
+      </select>
+
+      <button type="submit" class="btn" id="submit-btn">Connect →</button>
+    </form>
+  </div>
+</div>
+<script>
+const banksMap = {};
+
+fetch('/banks')
+  .then(r => r.json())
+  .then(banks => {
+    const dl = document.getElementById('banks-dl');
+    banks.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b.name;
+      dl.appendChild(opt);
+      if (!banksMap[b.name]) banksMap[b.name] = [];
+      banksMap[b.name].push(b.country);
+    });
+    document.getElementById('banks-status').textContent =
+      banks.length + ' banks loaded.';
+  })
+  .catch(() => {
+    document.getElementById('banks-status').textContent =
+      'Could not load bank list — type the name manually.';
+  });
+
+document.getElementById('bank_name').addEventListener('change', function () {
+  const countries = banksMap[this.value];
+  if (countries && countries.length === 1) {
+    document.getElementById('country').value = countries[0];
+  }
+});
+
+// uppercase country as the user types
+document.getElementById('country').addEventListener('input', function () {
+  const pos = this.selectionStart;
+  this.value = this.value.toUpperCase();
+  this.setSelectionRange(pos, pos);
+});
+
+document.querySelector('form').addEventListener('submit', function () {
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Redirecting to bank…';
+});
+</script>
+</body>
+</html>

@@ -8,7 +8,7 @@ import datetime
 import logging
 import threading
 
-from flask import Flask, abort, jsonify, redirect, request
+from flask import Flask, abort, jsonify, redirect, render_template, request
 
 from bank_connector.enable_banking import EnableBankingClient
 from bank_connector.storage import ConfigRepository, StateRepository
@@ -30,20 +30,29 @@ def create_app(
     def status():
         cfg = config_repo.load()
         state = state_repo.load()
-        return jsonify(
+        accounts = [
             {
-                "last_run": state.get("last_run"),
-                "accounts": [
-                    {
-                        "id": a["id"],
-                        "bank_name": a.get("bank_name"),
-                        "actual_account": a["actual_account"],
-                        "session_expiry": a.get("session_expiry"),
-                    }
-                    for a in cfg.get("accounts", [])
-                ],
+                "id": a["id"],
+                "bank_name": a.get("bank_name"),
+                "actual_account": a["actual_account"],
+                "session_expiry": a.get("session_expiry"),
             }
-        )
+            for a in cfg.get("accounts", [])
+        ]
+        if "text/html" in request.headers.get("Accept", ""):
+            today = datetime.date.today()
+            warn_threshold = today + datetime.timedelta(days=30)
+            for a in accounts:
+                exp = a.get("session_expiry")
+                a["expiring_soon"] = bool(
+                    exp and exp[:10] <= warn_threshold.isoformat()
+                )
+            return render_template(
+                "index.html",
+                last_run=state.get("last_run"),
+                accounts=accounts,
+            )
+        return jsonify({"last_run": state.get("last_run"), "accounts": accounts})
 
     @app.get("/banks")
     def list_banks():
@@ -51,16 +60,14 @@ def create_app(
 
     @app.get("/connect")
     def connect():
-        """Start the OAuth flow.
-
-        Visit in browser:
-        /connect?bank_name=Revolut&country=LT&actual_account=Revolut[&start_sync_date=YYYY-MM-DD]
-        """
         bank_name = request.args.get("bank_name")
         country = request.args.get("country")
         actual_account = request.args.get("actual_account")
         if not (bank_name and country and actual_account):
-            abort(400, "Missing bank_name, country, or actual_account")
+            return render_template(
+                "connect.html",
+                today=datetime.date.today().isoformat(),
+            )
         start_date = (
             request.args.get("start_sync_date") or datetime.date.today().isoformat()
         )
@@ -126,6 +133,8 @@ def create_app(
             )
             next_id += 1
         config_repo.save(cfg)
+        if "text/html" in request.headers.get("Accept", ""):
+            return render_template("callback.html", accounts=added)
         return jsonify(
             {
                 "connected": added,

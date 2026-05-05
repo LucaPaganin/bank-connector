@@ -1,7 +1,9 @@
+accounts.json
 mytest*
 *.pem
 sukuna*.crt
 sukuna*.key
+actual-cache
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

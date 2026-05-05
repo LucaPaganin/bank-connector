@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Connected — Bank Connector</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f5f5f5; color: #222; }
+  .container { max-width: 580px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; margin-bottom: 1.5rem; }
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 1.5rem 1.75rem; }
+  .ok { color: #166534; font-size: 0.95rem; font-weight: 600; margin-bottom: 1.25rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 0.85rem; }
+  th { font-weight: 600; color: #374151; }
+  tr:last-child td { border-bottom: none; }
+  .note { font-size: 0.78rem; color: #6b7280; margin-top: 1rem; line-height: 1.5; }
+  code { background: #f3f4f6; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.8rem; }
+  .btn { display: inline-block; margin-top: 1.5rem; padding: 0.5rem 1.2rem; background: #2563eb; color: #fff; border-radius: 4px; text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+  .btn:hover { background: #1d4ed8; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Bank Connected</h1>
+  <div class="card">
+    <p class="ok">✓ {{ accounts | length }} account{{ 's' if accounts | length != 1 else '' }} connected successfully</p>
+    <table>
+      <thead><tr><th>#</th><th>IBAN</th><th>Account name</th></tr></thead>
+      <tbody>
+      {% for a in accounts %}
+      <tr>
+        <td>{{ a.id }}</td>
+        <td>{{ a.iban or '—' }}</td>
+        <td>{{ a.name or '—' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if accounts | length > 1 %}
+    <p class="note">
+      All accounts above are mapped to the same Actual Budget account.
+      Edit <code>accounts.json</code> if you need different mappings.
+    </p>
+    {% endif %}
+    <a class="btn" href="/">← Back to dashboard</a>
+  </div>
+</div>
+</body>
+</html>

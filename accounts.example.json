@@ -9,5 +9,17 @@
     "encryption_password": null,
     "sync_id": "your-budget-sync-id"
   },
-  "accounts": []
+  "accounts": [
+    {
+      "id": 1,
+      "session_id": "3b353271-931f-4bef-888e-83d554ad25c2",
+      "account_uid": "eccb6b70-f736-4413-a7ed-a16265508889",
+      "bank_name": "Revolut",
+      "country": "IT",
+      "actual_account": "test",
+      "start_sync_date": "2026-05-04",
+      "session_expiry": "2026-10-31T20:42:38Z",
+      "skip_pending": false
+    }
+  ]
 }
