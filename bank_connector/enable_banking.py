@@ -91,12 +91,15 @@ class EnableBankingClient:
         ]
 
     def fetch_transactions(
-        self, account_uid: str, date_from: datetime.date
+        self,
+        account_uid: str,
+        date_from: datetime.date,
+        date_to: datetime.date | None = None,
     ) -> list[dict]:
         headers = self._headers()
         params = {
             "date_from": date_from.isoformat(),
-            "date_to": datetime.date.today().isoformat(),
+            "date_to": (date_to or datetime.date.today()).isoformat(),
         }
         url = f"{self.api_url}/accounts/{account_uid}/transactions"
         txns: list[dict] = []

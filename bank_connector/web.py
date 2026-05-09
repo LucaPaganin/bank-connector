@@ -8,9 +8,11 @@ import datetime
 import logging
 import threading
 
-from flask import Flask, abort, jsonify, redirect, render_template, request
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request
 
+from bank_connector.csv_export import transactions_to_csv
 from bank_connector.enable_banking import EnableBankingClient
+from bank_connector.parsing import parse_own_names, parse_transaction
 from bank_connector.storage import ConfigRepository, StateRepository
 from bank_connector.sync import SyncService
 
@@ -168,5 +170,69 @@ def create_app(
     def manual_sync():
         threading.Thread(target=sync_service.run, daemon=True).start()
         return jsonify({"started": True})
+
+    @app.get("/export")
+    def export_form():
+        cfg = config_repo.load()
+        accounts = [
+            {
+                "id": a["id"],
+                "bank_name": a.get("bank_name", ""),
+                "actual_account": a["actual_account"],
+            }
+            for a in cfg.get("accounts", [])
+        ]
+        today = datetime.date.today()
+        return render_template(
+            "export.html",
+            accounts=accounts,
+            today=today.isoformat(),
+            default_from=(today - datetime.timedelta(days=90)).isoformat(),
+        )
+
+    @app.get("/export/<int:account_id>")
+    def export_csv(account_id: int):
+        cfg = config_repo.load()
+        account = next(
+            (a for a in cfg.get("accounts", []) if a["id"] == account_id), None
+        )
+        if not account:
+            abort(404, f"No account with id={account_id}")
+
+        date_from_str = request.args.get("date_from")
+        date_to_str = request.args.get("date_to")
+        try:
+            date_from = (
+                datetime.date.fromisoformat(date_from_str)
+                if date_from_str
+                else datetime.date.today() - datetime.timedelta(days=90)
+            )
+        except ValueError:
+            abort(400, "date_from must be YYYY-MM-DD")
+        try:
+            date_to = (
+                datetime.date.fromisoformat(date_to_str)
+                if date_to_str
+                else datetime.date.today()
+            )
+        except ValueError:
+            abort(400, "date_to must be YYYY-MM-DD")
+
+        own_names = parse_own_names(cfg.get("account_holder_name", ""))
+        raw_txns = eb_client.fetch_transactions(
+            account["account_uid"], date_from, date_to=date_to
+        )
+        parsed = sorted(
+            (parse_transaction(t, own_names) for t in raw_txns),
+            key=lambda t: t.date,
+            reverse=True,
+        )
+        csv_text = transactions_to_csv(parsed)
+        filename = f"transactions_{account_id}_{date_from}_{date_to}.csv"
+        return Response(
+            csv_text,
+            mimetype="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     return app

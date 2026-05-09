@@ -41,7 +41,7 @@
   {% if accounts %}
   <table>
     <thead>
-      <tr><th>ID</th><th>Bank</th><th>Actual Account</th><th>Session Expires</th></tr>
+      <tr><th>ID</th><th>Bank</th><th>Actual Account</th><th>Session Expires</th><th></th></tr>
     </thead>
     <tbody>
     {% for a in accounts %}
@@ -56,6 +56,7 @@
           </span>
         {% else %}—{% endif %}
       </td>
+      <td><a class="btn btn-ghost" href="/export?account={{ a.id }}">Export CSV</a></td>
     </tr>
     {% endfor %}
     </tbody>

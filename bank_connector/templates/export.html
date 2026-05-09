@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Export CSV — Bank Connector</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f5f5f5; color: #222; }
+  .container { max-width: 480px; margin: 2rem auto; padding: 0 1rem; }
+  a.back { font-size: 0.85rem; color: #6b7280; text-decoration: none; display: inline-block; margin-bottom: 1.25rem; }
+  a.back:hover { color: #222; }
+  h1 { font-size: 1.4rem; margin-bottom: 1.5rem; }
+  .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 1.5rem 1.75rem; }
+  label { display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-top: 1.1rem; margin-bottom: 0.3rem; }
+  label:first-of-type { margin-top: 0; }
+  input, select {
+    width: 100%; padding: 0.5rem 0.65rem; border: 1px solid #d1d5db;
+    border-radius: 4px; font-size: 0.875rem; font-family: inherit; background: #fff;
+  }
+  input:focus, select:focus {
+    outline: none; border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+  }
+  .hint { font-size: 0.75rem; color: #6b7280; margin-top: 0.3rem; }
+  .btn {
+    display: block; width: 100%; margin-top: 1.75rem;
+    padding: 0.6rem; background: #2563eb; color: #fff;
+    border: none; border-radius: 4px; cursor: pointer;
+    font-size: 0.875rem; font-family: inherit; font-weight: 600;
+  }
+  .btn:hover { background: #1d4ed8; }
+  .btn:disabled { background: #93c5fd; cursor: default; }
+</style>
+</head>
+<body>
+<div class="container">
+  <a class="back" href="/">← Dashboard</a>
+  <h1>Export Transactions</h1>
+  <div class="card">
+
+    <label for="account_id">Account</label>
+    {% if accounts %}
+    <select id="account_id">
+      {% for a in accounts %}
+      <option value="{{ a.id }}">{{ a.bank_name or ('Account ' ~ a.id) }} — {{ a.actual_account }}</option>
+      {% endfor %}
+    </select>
+    {% else %}
+    <select id="account_id" disabled>
+      <option value="">No accounts connected</option>
+    </select>
+    <p class="hint"><a href="/connect">Connect a bank first.</a></p>
+    {% endif %}
+
+    <label for="date_from">From</label>
+    <input type="date" id="date_from" value="{{ default_from }}">
+
+    <label for="date_to">To</label>
+    <input type="date" id="date_to" value="{{ today }}">
+
+    <p class="hint">
+      Exported as CSV in Actual Budget import format (Date, Payee, Notes, Amount, Ref, Status).
+    </p>
+
+    <button type="button" class="btn" id="dl-btn"
+            onclick="doExport(this)" {% if not accounts %}disabled{% endif %}>
+      Download CSV
+    </button>
+  </div>
+</div>
+<script>
+async function doExport(btn) {
+  const accountId = document.getElementById('account_id').value;
+  const dateFrom  = document.getElementById('date_from').value;
+  const dateTo    = document.getElementById('date_to').value;
+  if (!accountId || !dateFrom || !dateTo) return;
+  btn.disabled = true;
+  btn.textContent = 'Fetching transactions…';
+  const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+  try {
+    const resp = await fetch(`/export/${accountId}?${params}`);
+    if (!resp.ok) {
+      const msg = await resp.text();
+      alert('Export failed (' + resp.status + '): ' + msg.slice(0, 300));
+      return;
+    }
+    const blob = await resp.blob();
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : `transactions_${accountId}.csv`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Export error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Download CSV';
+  }
+}
+
+// Pre-select account from query string (?account=<id>)
+(function () {
+  const id = new URLSearchParams(location.search).get('account');
+  if (id) {
+    const sel = document.getElementById('account_id');
+    for (const opt of sel.options) {
+      if (opt.value === id) { opt.selected = true; break; }
+    }
+  }
+})();
+</script>
+</body>
+</html>
