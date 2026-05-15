@@ -17,6 +17,8 @@ from bank_connector.settings import (
     STATE_FILE,
     SSL_CRT_FILE,
     SSL_KEY_FILE,
+    SYNC_ENABLED,
+    default_base_url,
     default_redirect_url,
 )
 from bank_connector.storage import ConfigRepository, StateRepository
@@ -33,6 +35,8 @@ def main() -> None:
             CONFIG_FILE,
         )
         sys.exit(1)
+    
+    log.info(f"Open {default_base_url()} to view the gui")
 
     config_repo = ConfigRepository(CONFIG_FILE)
     state_repo = StateRepository(STATE_FILE)
@@ -50,7 +54,14 @@ def main() -> None:
         actual_data_dir=ACTUAL_DATA_DIR,
     )
 
-    threading.Thread(target=sync_service.scheduler_loop, daemon=True).start()
+    if SYNC_ENABLED:
+        threading.Thread(target=sync_service.scheduler_loop, daemon=True).start()
+        log.info("Auto sync enabled")
+    else:
+        log.info(
+            "Auto sync disabled (set BC_SYNC_ENABLED=1 to enable); "
+            "manual POST /sync still works"
+        )
 
     app = create_app(
         config_repo=config_repo,

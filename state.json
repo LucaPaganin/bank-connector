@@ -1,9 +1,5 @@
 {
-  "accounts": {
-    "2": {
-      "last_sync_date": "2026-05-09"
-    }
-  },
+  "accounts": {},
   "pending_oauth": {},
-  "last_run": "2026-05-09T09:50:04"
+  "last_run": "2026-05-15T21:55:17"
 }

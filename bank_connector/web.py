@@ -5,6 +5,7 @@ state, no implicit config reads. The factory returns a fully wired Flask app
 the caller can `.run()` or hand to a WSGI server.
 """
 import datetime
+import json
 import logging
 import threading
 
@@ -38,6 +39,7 @@ def create_app(
                 "bank_name": a.get("bank_name"),
                 "actual_account": a["actual_account"],
                 "session_expiry": a.get("session_expiry"),
+                "notes": a.get("notes", ""),
             }
             for a in cfg.get("accounts", [])
         ]
@@ -102,6 +104,8 @@ def create_app(
         state_repo.save(state)
 
         result = eb_client.complete_auth(code, state_val)
+        log.info("complete_auth response keys: %s", list(result.keys()))
+        log.info("complete_auth response: %s", result)
         session_id = result["session_id"]
         bank_accounts = result.get("accounts", [])
         if not bank_accounts:
@@ -218,10 +222,30 @@ def create_app(
         except ValueError:
             abort(400, "date_to must be YYYY-MM-DD")
 
-        own_names = parse_own_names(cfg.get("account_holder_name", ""))
         raw_txns = eb_client.fetch_transactions(
             account["account_uid"], date_from, date_to=date_to
         )
+
+        if request.args.get("format") == "json":
+            body = json.dumps(
+                {
+                    "account_id": account_id,
+                    "date_from": date_from.isoformat(),
+                    "date_to": date_to.isoformat(),
+                    "count": len(raw_txns),
+                    "transactions": raw_txns,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+            fname = f"transactions_{account_id}_{date_from}_{date_to}.json"
+            return Response(
+                body,
+                mimetype="application/json",
+                headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+            )
+
+        own_names = parse_own_names(cfg.get("account_holder_name", ""))
         parsed = sorted(
             (parse_transaction(t, own_names) for t in raw_txns),
             key=lambda t: t.date,
@@ -233,6 +257,40 @@ def create_app(
             csv_text,
             mimetype="text/csv",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.get("/convert")
+    def convert_form():
+        return render_template("convert.html")
+
+    @app.post("/convert")
+    def convert_json():
+        raw = request.get_data(as_text=True)
+        try:
+            payload = json.loads(raw)
+        except (ValueError, TypeError):
+            abort(400, "Body is not valid JSON")
+        if isinstance(payload, dict):
+            raw_txns = payload.get("transactions", [])
+        elif isinstance(payload, list):
+            raw_txns = payload
+        else:
+            abort(400, "Expected a JSON array or an object with a 'transactions' key")
+
+        cfg = config_repo.load()
+        own_names = parse_own_names(cfg.get("account_holder_name", ""))
+        parsed = []
+        for t in raw_txns:
+            try:
+                parsed.append(parse_transaction(t, own_names))
+            except Exception as e:
+                log.warning("Skipping txn during convert (%s)", e)
+        parsed.sort(key=lambda p: p.date, reverse=True)
+        csv_text = transactions_to_csv(parsed)
+        return Response(
+            csv_text,
+            mimetype="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="converted.csv"'},
         )
 
     return app

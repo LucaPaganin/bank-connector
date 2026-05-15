@@ -6,7 +6,74 @@ doesn't need to know about config.
 import datetime
 import decimal
 from dataclasses import dataclass
+from typing import Any
 
+from pydantic import BaseModel
+
+
+# ---------------------------------------------------------------------------
+# Enable Banking raw transaction schema
+# ---------------------------------------------------------------------------
+
+class _BankTransactionCode(BaseModel):
+    model_config = {"extra": "ignore"}
+    code: str | None = None
+    description: str | None = None
+    sub_code: str | None = None
+
+
+class _Party(BaseModel):
+    model_config = {"extra": "ignore"}
+    name: str | None = None
+
+
+class _Account(BaseModel):
+    model_config = {"extra": "ignore"}
+    iban: str | None = None
+
+
+class _CardId(BaseModel):
+    model_config = {"extra": "ignore"}
+    identification: str | None = None  # last 4 digits
+    issuer: str | None = None          # VISA, MASTERCARD, …
+    scheme_name: str | None = None
+
+
+class _TransactionAmount(BaseModel):
+    model_config = {"extra": "ignore"}
+    amount: str = "0"
+    currency: str = "EUR"
+
+
+class EnableBankingTransaction(BaseModel):
+    """Pydantic schema for a single Enable Banking transaction payload."""
+
+    model_config = {"extra": "ignore"}
+
+    booking_date: str | None = None
+    value_date: str | None = None
+    transaction_date: str | None = None
+    status: str = "BOOK"
+    credit_debit_indicator: str | None = None
+    transaction_amount: _TransactionAmount = _TransactionAmount()
+    entry_reference: str | None = None
+    transaction_id: str | None = None
+    bank_transaction_code: _BankTransactionCode | None = None
+    creditor: _Party | None = None
+    creditor_account: _Account | None = None
+    debtor: _Party | None = None
+    debtor_account: _Account | None = None
+    debtor_account_additional_identification: list[_CardId] | None = None
+    remittance_information: list[str] | str | None = None
+    remittance_information_unstructured: str | None = None
+    note: str | None = None
+    reference_number: str | None = None
+    merchant_category_code: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Public surface
+# ---------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class ParsedTransaction:
@@ -28,57 +95,99 @@ def parse_own_names(raw: str) -> frozenset[str]:
 
 
 def parse_transaction(t: dict, own_names: frozenset[str]) -> ParsedTransaction:
-    payee = _parse_payee(t, own_names)
-    notes = _parse_notes(t)
-    if notes and notes.strip().lower() == payee.strip().lower():
-        notes = ""
+    txn = EnableBankingTransaction.model_validate(t)
+    payee = _parse_payee(txn, own_names)
+    notes = _build_notes(txn, payee)
     return ParsedTransaction(
-        date=_parse_date(t),
-        amount=_parse_amount(t),
+        date=_parse_date(txn),
+        amount=_parse_amount(txn),
         payee=payee,
         notes=notes,
-        ref=_entry_ref(t),
-        status=t.get("status", "BOOK"),
+        ref=txn.entry_reference or txn.transaction_id or "",
+        status=txn.status,
     )
 
 
-def _parse_date(t: dict) -> datetime.date:
-    raw = t.get("booking_date") or t.get("value_date") or t.get("transaction_date")
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _parse_date(txn: EnableBankingTransaction) -> datetime.date:
+    raw = txn.booking_date or txn.value_date or txn.transaction_date
     if not raw:
         raise ValueError("No date in transaction")
     return datetime.date.fromisoformat(raw[:10])
 
 
-def _parse_amount(t: dict) -> decimal.Decimal:
-    amt = decimal.Decimal(str((t.get("transaction_amount") or {}).get("amount", "0")))
-    indic = t.get("credit_debit_indicator") or t.get("credit_debit_indic", "")
-    return -abs(amt) if indic.upper() == "DBIT" else abs(amt)
+def _parse_amount(txn: EnableBankingTransaction) -> decimal.Decimal:
+    amt = decimal.Decimal(txn.transaction_amount.amount)
+    indic = (txn.credit_debit_indicator or "").upper()
+    return -abs(amt) if indic == "DBIT" else abs(amt)
 
 
-def _parse_payee(t: dict, own_names: frozenset[str]) -> str:
-    indic = (t.get("credit_debit_indicator") or t.get("credit_debit_indic", "")).upper()
+def _remittance_text(txn: EnableBankingTransaction) -> str:
+    if txn.remittance_information_unstructured:
+        return txn.remittance_information_unstructured
+    ri = txn.remittance_information
+    if isinstance(ri, list):
+        return " ".join(ri)
+    return ri or ""
+
+
+def _parse_payee(txn: EnableBankingTransaction, own_names: frozenset[str]) -> str:
+    indic = (txn.credit_debit_indicator or "").upper()
     if indic == "DBIT":
-        name = (t.get("creditor") or {}).get("name") or t.get("creditor_name")
+        name = txn.creditor.name if txn.creditor else None
         if not name:
-            ri = t.get("remittance_information")
-            name = ri[0] if isinstance(ri, list) else ri
+            name = _remittance_text(txn)
     else:
-        name = (t.get("debtor") or {}).get("name") or t.get("debtor_name")
+        name = txn.debtor.name if txn.debtor else None
         if not name or (own_names and name.lower() in own_names):
-            ri = t.get("remittance_information")
-            name = ri[0] if isinstance(ri, list) else ri
+            name = _remittance_text(txn)
     return name or "Unknown"
 
 
-def _parse_notes(t: dict) -> str:
-    ref = t.get("remittance_information_unstructured")
-    if ref:
-        return ref
-    ri = t.get("remittance_information")
-    if ri and isinstance(ri, list):
-        return " ".join(ri)
-    return ""
+def _build_notes(txn: EnableBankingTransaction, payee: str) -> str:
+    parts: list[str] = []
 
+    # Primary description from remittance info — skip if identical to payee
+    ri = _remittance_text(txn)
+    if ri and ri.strip().lower() != payee.strip().lower():
+        parts.append(ri)
 
-def _entry_ref(t: dict) -> str:
-    return t.get("entry_reference") or t.get("transaction_id") or ""
+    # Free-text note field
+    if txn.note:
+        parts.append(txn.note)
+
+    # Transaction type code (TRANSFER, CARD_PAYMENT, ATM, TOPUP, …)
+    if txn.bank_transaction_code and txn.bank_transaction_code.code:
+        parts.append(txn.bank_transaction_code.code)
+
+    # Card used: issuer + last-4 digits
+    if txn.debtor_account_additional_identification:
+        card = txn.debtor_account_additional_identification[0]
+        if card.issuer and card.identification:
+            parts.append(f"{card.issuer} {card.identification}")
+        elif card.identification:
+            parts.append(f"Card {card.identification}")
+
+    # Counterparty IBAN
+    indic = (txn.credit_debit_indicator or "").upper()
+    if indic == "DBIT" and txn.creditor_account and txn.creditor_account.iban:
+        parts.append(f"IBAN: {txn.creditor_account.iban}")
+    elif indic == "CRDT" and txn.debtor_account and txn.debtor_account.iban:
+        parts.append(f"IBAN: {txn.debtor_account.iban}")
+
+    # Reference number
+    if txn.reference_number:
+        parts.append(f"Ref: {txn.reference_number}")
+
+    # Merchant category code
+    if txn.merchant_category_code:
+        parts.append(f"MCC: {txn.merchant_category_code}")
+
+    # Non-EUR currency
+    if txn.transaction_amount.currency != "EUR":
+        parts.append(f"Currency: {txn.transaction_amount.currency}")
+
+    return " | ".join(parts)

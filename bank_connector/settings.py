@@ -4,6 +4,7 @@
 `accounts.json`, `state.json`, `private.pem` and `actual-cache/` keep their
 existing locations.
 """
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,7 +19,14 @@ EB_API = "https://api.enablebanking.com"
 HOST = "0.0.0.0"
 PORT = 3000
 SYNC_INTERVAL_HOURS = 24
+# Set BC_SYNC_ENABLED=1 to enable the background auto-sync scheduler; off by
+# default so the app can be used purely for CSV export without an Actual
+# Budget instance. Manual POST /sync is unaffected by this flag.
+SYNC_ENABLED: bool = os.getenv("BC_SYNC_ENABLED", "").lower() in ("1", "true", "yes")
 
+
+def default_base_url() -> str:
+    return f"https://sukuna.cormorant-bleak.ts.net:{PORT}"
 
 def default_redirect_url() -> str:
-    return f"http://localhost:{PORT}/callback"
+    return f"{default_base_url()}/callback"

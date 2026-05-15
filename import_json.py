@@ -53,7 +53,6 @@ def main() -> None:
     from actual.queries import (
         create_transaction,
         get_or_create_account,
-        get_transactions,
         reconcile_transaction,
     )
 
@@ -68,8 +67,11 @@ def main() -> None:
         data_dir=str(ACTUAL_DATA_DIR),
     ) as actual:
         account_obj = get_or_create_account(actual.session, actual_name)
-        existing = list(get_transactions(actual.session, account=account_obj))
-        already_matched = existing[:]
+        # actualpy treats already_matched as an EXCLUSION list for fuzzy
+        # matching: it must start empty and grow per matched/created txn.
+        # Seeding it with existing transactions would re-create ref-less
+        # transactions as duplicates on a re-import.
+        already_matched: list = []
 
         for raw in raw_transactions:
             try:

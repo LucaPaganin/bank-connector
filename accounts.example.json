@@ -19,7 +19,8 @@
       "actual_account": "test",
       "start_sync_date": "2026-05-04",
       "session_expiry": "2026-10-31T20:42:38Z",
-      "skip_pending": false
+      "skip_pending": false,
+      "notes": ""
     }
   ]
 }

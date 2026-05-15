@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: connector.py",
+            "name": "connector.py",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/connector.py",

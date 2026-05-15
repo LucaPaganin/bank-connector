@@ -95,7 +95,12 @@ class AccountSyncer:
         ) as actual:
             account_obj = get_or_create_account(actual.session, actual_name)
             existing = list(get_transactions(actual.session, account=account_obj))
-            already_matched = existing[:]
+            # actualpy treats already_matched as an EXCLUSION list for fuzzy
+            # matching. It must start empty and grow per matched/created txn
+            # during this run; seeding it with `existing` would hide every
+            # prior transaction from fuzzy matching and re-create ref-less
+            # booked transactions as duplicates on each sync.
+            already_matched: list = []
             new_txn = []
 
             for raw_txn in raw:
