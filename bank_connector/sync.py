@@ -103,9 +103,10 @@ class AccountSyncer:
             already_matched: list = []
             new_txn = []
 
+            bank_name = account.get("bank_name", "")
             for raw_txn in raw:
                 try:
-                    parsed = parse_transaction(raw_txn, own_names)
+                    parsed = parse_transaction(raw_txn, own_names, bank_name)
                 except Exception as e:
                     log.warning("Skipping txn (%s)", e)
                     continue

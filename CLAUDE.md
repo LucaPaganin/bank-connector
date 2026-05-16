@@ -33,7 +33,7 @@ Starts a Flask server on `127.0.0.1:3000` and a daemon thread running `scheduler
 |---|---|
 | `connector.py` | Entry shim — calls `bank_connector.cli.main()` |
 | `bank_connector/__init__.py` | Package init — applies `patch_actualpy` eagerly + sets up logging |
-| `bank_connector/settings.py` | Constants and paths (`ROOT`, `CONFIG_FILE`, `STATE_FILE`, `EB_API`, `HOST`, `PORT`, `SYNC_INTERVAL_HOURS`) |
+| `bank_connector/settings.py` | Constants and paths (`ROOT`, `CONFIG_FILE`, `STATE_FILE`, `EB_API`, `HOST`, `PORT`, `SYNC_INTERVAL_HOURS`), each overridable via a `BANK_CONN_<NAME>` env var |
 | `bank_connector/storage.py` | `ConfigRepository` and `StateRepository` — JSON load/save |
 | `bank_connector/enable_banking.py` | `EnableBankingClient` — JWT auth + HTTP calls (`start_auth`, `complete_auth`, `list_banks`, `fetch_transactions`) |
 | `bank_connector/parsing.py` | `ParsedTransaction` dataclass + `parse_transaction` / `parse_own_names` (pure functions) |
@@ -53,7 +53,7 @@ Starts a Flask server on `127.0.0.1:3000` and a daemon thread running `scheduler
 
 | Module | Public surface |
 |---|---|
-| `settings` | `ROOT`, `CONFIG_FILE`, `STATE_FILE`, `PEM_DEFAULT`, `ACTUAL_DATA_DIR`, `EB_API`, `HOST`, `PORT`, `SYNC_INTERVAL_HOURS`, `default_redirect_url()` |
+| `settings` | `ROOT`, `CONFIG_FILE`, `STATE_FILE`, `PEM_DEFAULT`, `ACTUAL_DATA_DIR`, `SSL_CRT_FILE`, `SSL_KEY_FILE`, `EB_API`, `HOST`, `PORT`, `SYNC_INTERVAL_HOURS`, `SYNC_ENABLED`, `default_base_url()`, `default_redirect_url()`. Every tunable reads `BANK_CONN_<NAME>` (e.g. `BANK_CONN_PORT`, `BANK_CONN_SYNC_ENABLED`, `BANK_CONN_BASE_URL`); current values are the defaults. |
 | `storage` | `ConfigRepository(path)`, `StateRepository(path)` — both with `.load()` / `.save()` |
 | `enable_banking` | `EnableBankingClient(application_id, pem_path, redirect_url, ...)` |
 | `parsing` | `ParsedTransaction`, `parse_transaction(t, own_names)`, `parse_own_names(raw)` |
@@ -81,8 +81,9 @@ Starts a Flask server on `127.0.0.1:3000` and a daemon thread running `scheduler
 
 | Task | Where to look |
 |---|---|
-| Change sync cadence | `SYNC_INTERVAL_HOURS` in `bank_connector/settings.py` (or pass `interval_hours=` to `SyncService` in `cli.main`) |
-| Change listening port | `HOST` / `PORT` in `bank_connector/settings.py` (also update `redirect_url` and re-register in Enable Banking) |
+| Change sync cadence | `BANK_CONN_SYNC_INTERVAL_HOURS` env var (or edit the `SYNC_INTERVAL_HOURS` default in `bank_connector/settings.py`, or pass `interval_hours=` to `SyncService` in `cli.main`) |
+| Change listening port | `BANK_CONN_PORT` / `BANK_CONN_HOST` env var (or the `HOST`/`PORT` defaults in `bank_connector/settings.py`; also update `redirect_url`/`BANK_CONN_BASE_URL` and re-register in Enable Banking) |
+| Enable background auto-sync | `BANK_CONN_SYNC_ENABLED=1` (off by default; manual `POST /sync` works regardless) |
 | Reset an account's history | Stop the connector, remove `state.accounts.<id>` from `state.json`, restart — next sync re-fetches from `start_sync_date` |
 | Disconnect a bank | Remove its entry from `accounts.json` and (optionally) the matching `state.accounts.<id>` |
 | Inspect what was imported | `actual-cache/` is the SQLite replica — readable with any SQLite tool, but Actual Budget is the source of truth |

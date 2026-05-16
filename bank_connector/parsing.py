@@ -5,6 +5,7 @@ doesn't need to know about config.
 """
 import datetime
 import decimal
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -94,9 +95,9 @@ def parse_own_names(raw: str) -> frozenset[str]:
     return frozenset(n.strip().lower() for n in (raw or "").split(",") if n.strip())
 
 
-def parse_transaction(t: dict, own_names: frozenset[str]) -> ParsedTransaction:
+def parse_transaction(t: dict, own_names: frozenset[str], bank_name: str = "") -> ParsedTransaction:
     txn = EnableBankingTransaction.model_validate(t)
-    payee = _parse_payee(txn, own_names)
+    payee = _parse_payee(txn, own_names, bank_name)
     notes = _build_notes(txn, payee)
     return ParsedTransaction(
         date=_parse_date(txn),
@@ -130,21 +131,57 @@ def _remittance_text(txn: EnableBankingTransaction) -> str:
         return txn.remittance_information_unstructured
     ri = txn.remittance_information
     if isinstance(ri, list):
-        return " ".join(ri)
+        return " | ".join(ri)
     return ri or ""
 
 
-def _parse_payee(txn: EnableBankingTransaction, own_names: frozenset[str]) -> str:
+def _parse_payee(txn: EnableBankingTransaction, own_names: frozenset[str], bank_name: str = "") -> str:
+    # Try bank-specific extraction before falling back to generic logic.
+    specific = _bank_specific_payee(txn, bank_name)
+    if specific:
+        return specific
+
     indic = (txn.credit_debit_indicator or "").upper()
     if indic == "DBIT":
         name = txn.creditor.name if txn.creditor else None
-        if not name:
+        if not name or (own_names and name.lower() in own_names):
             name = _remittance_text(txn)
     else:
         name = txn.debtor.name if txn.debtor else None
         if not name or (own_names and name.lower() in own_names):
             name = _remittance_text(txn)
     return name or "Unknown"
+
+
+def _bank_specific_payee(txn: EnableBankingTransaction, bank_name: str) -> str | None:
+    if bank_name == "FinecoBank":
+        return _fineco_payee(txn)
+    return None
+
+
+def _fineco_payee(txn: EnableBankingTransaction) -> str | None:
+    """Extract a clean payee from Fineco remittance conventions.
+
+    Returns None when no known pattern matches, letting generic logic take over.
+    """
+    ri = _remittance_text(txn)
+    indic = (txn.credit_debit_indicator or "").upper()
+
+    # Card payments: "{MERCHANT} Carta N. ***** {LAST4} Data operazione {DATE}"
+    if "Carta N." in ri:
+        return ri.split("Carta N.")[0].strip() or None
+
+    # SEPA Direct Debit: "{CREDITOR} Addebito SDD ..."
+    if "Addebito SDD" in ri:
+        return ri.split("Addebito SDD")[0].strip() or None
+
+    # Incoming wires and salaries: "Ord: {SENDER} Ben: {BENEFICIARY} Dt-ord: ..."
+    if indic == "CRDT":
+        m = re.search(r"Ord:\s*(.+?)\s+Ben:", ri)
+        if m:
+            return m.group(1).strip() or None
+
+    return None
 
 
 def _build_notes(txn: EnableBankingTransaction, payee: str) -> str:

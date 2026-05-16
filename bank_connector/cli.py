@@ -59,7 +59,7 @@ def main() -> None:
         log.info("Auto sync enabled")
     else:
         log.info(
-            "Auto sync disabled (set BC_SYNC_ENABLED=1 to enable); "
+            "Auto sync disabled (set BANK_CONN_SYNC_ENABLED=1 to enable); "
             "manual POST /sync still works"
         )
 
