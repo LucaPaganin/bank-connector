@@ -8,6 +8,7 @@ import datetime
 import json
 import logging
 import threading
+import hmac
 
 from flask import Flask, Response, abort, jsonify, redirect, render_template, request
 
@@ -16,6 +17,7 @@ from bank_connector.enable_banking import EnableBankingClient
 from bank_connector.parsing import parse_own_names, parse_transaction
 from bank_connector.storage import ConfigRepository, StateRepository
 from bank_connector.sync import SyncService
+from bank_connector.settings import SYNC_TOKEN
 
 log = logging.getLogger("connector")
 
@@ -26,8 +28,19 @@ def create_app(
     state_repo: StateRepository,
     eb_client: EnableBankingClient,
     sync_service: SyncService,
+    sync_token: str | None = None,
 ) -> Flask:
     app = Flask(__name__)
+    operational_token = SYNC_TOKEN if sync_token is None else sync_token
+
+    def require_sync_token():
+        """Protect operational APIs; production config must provide a token."""
+        supplied = request.headers.get("X-Sync-Token", "")
+        # Test applications may omit credentials; a real process must configure one.
+        if app.testing and not operational_token:
+            return
+        if not operational_token or not hmac.compare_digest(supplied, operational_token):
+            abort(401, "missing or invalid sync token")
 
     @app.get("/")
     def status():
@@ -104,8 +117,7 @@ def create_app(
         state_repo.save(state)
 
         result = eb_client.complete_auth(code, state_val)
-        log.info("complete_auth response keys: %s", list(result.keys()))
-        log.info("complete_auth response: %s", result)
+        log.info("OAuth completed; received %d bank account(s)", len(result.get("accounts", [])))
         session_id = result["session_id"]
         bank_accounts = result.get("accounts", [])
         if not bank_accounts:
@@ -171,9 +183,24 @@ def create_app(
         return jsonify({"account_id": account_id, "date_from": date_from.isoformat(), "count": len(txns), "transactions": txns})
 
     @app.post("/sync")
+    @app.post("/sync/refresh")
     def manual_sync():
+        require_sync_token()
         threading.Thread(target=sync_service.run, daemon=True).start()
         return jsonify({"started": True})
+
+    @app.get("/sync/status")
+    def sync_status():
+        require_sync_token()
+        state = state_repo.load()
+        accounts = {}
+        for account_id, item in state.get("accounts", {}).items():
+            accounts[str(account_id)] = {
+                "last_sync_succeeded_at": item.get("last_sync_succeeded_at"),
+                "status": item.get("status", "never"),
+                "error": item.get("error"),
+            }
+        return jsonify({"last_run": state.get("last_run"), "accounts": accounts})
 
     @app.get("/export")
     def export_form():

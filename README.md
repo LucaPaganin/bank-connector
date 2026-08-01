@@ -84,6 +84,58 @@ To find supported banks: `GET /banks` returns the full list of names and country
 
 ---
 
+## Server deployment (Docker)
+
+The Compose stack runs the connector as a non-root container on an `internal` Docker network shared only with Actual. The connector publishes port 3000 on loopback only; expose it to Tailscale using the NAS/Tailscale setup, never with port forwarding. Copy `accounts.example.json` to `accounts.json`, then set the required values in `.env` (`BANK_CONN_SYNC_TOKEN`, `ACTUAL_PASSWORD`, `ENABLE_BANKING_APPLICATION_ID`, `BANK_CONN_BASE_URL`, and `BANK_CONN_REDIRECT_URL`). The private Enable Banking key is mounted read-only and Actual is reached as `http://actual-server:5006`.
+
+The scheduler uses APScheduler and runs every 6 hours by default in Compose. `POST /sync/refresh` and `GET /sync/status` require `X-Sync-Token`; `/sync` is retained as a backwards-compatible alias and has the same protection. Status is persisted in the state volume per account, including `last_sync_succeeded_at`, `ok`, `error`, or `reauthorization_required`.
+
+```sh
+cp accounts.example.json accounts.json
+export BANK_CONN_SYNC_TOKEN="$(openssl rand -hex 32)"
+export ACTUAL_PASSWORD='...'
+export ENABLE_BANKING_APPLICATION_ID='...'
+export BANK_CONN_BASE_URL='https://your-tailnet-host:8443'
+export BANK_CONN_REDIRECT_URL="$BANK_CONN_BASE_URL/callback"
+docker compose up -d --build
+curl -i -X POST http://127.0.0.1:3000/sync/refresh -H "X-Sync-Token: $BANK_CONN_SYNC_TOKEN"
+curl -s http://127.0.0.1:3000/sync/status -H "X-Sync-Token: $BANK_CONN_SYNC_TOKEN"
+```
+
+Run the refresh twice and verify in Actual that the second run reports no additions and does not create duplicates. A 401/403 from Enable Banking is reported as `reauthorization_required`; re-run the interactive `/connect` flow rather than retrying aggressively.
+
+## Test MCP con Actual Budget sul NAS
+
+Il servizio `actual-mcp` incluso nel Compose usa l'immagine `sstefanov/actual-mcp`, si collega a `http://192.168.1.148:5006` e ascolta SSE solamente su `127.0.0.1:3001`. È protetto da bearer token; non viene esposto su Internet o sulla rete Docker interna del connector.
+
+Impostare anche questi valori nel file `.env` (non committarlo):
+
+```dotenv
+ACTUAL_PASSWORD=...
+ACTUAL_BUDGET_SYNC_ID=...
+ACTUAL_MCP_TOKEN=...
+```
+
+Avvio e verifica:
+
+```sh
+docker compose up -d actual-mcp
+docker compose logs -f actual-mcp
+curl -i http://127.0.0.1:3001/ -H "Authorization: Bearer $ACTUAL_MCP_TOKEN"
+```
+
+Per collegare un client MCP compatibile usare l'endpoint SSE `http://127.0.0.1:3001` con il bearer token. Ad esempio, per Codex:
+
+```toml
+[mcp_servers.actual-budget]
+url = "http://127.0.0.1:3001"
+# configurare il token Authorization secondo il client utilizzato
+```
+
+Il server espone strumenti di sola lettura e scrittura (la Compose abilita `--enable-write` solo se lo si aggiunge esplicitamente al comando). Prima del primo test di scrittura verificare budget e sync ID con una query di lettura.
+
+Per usare questo MCP direttamente con Pi è stata aggiunta l'estensione `.pi/extensions/actual-mcp/index.ts`. Dopo aver avviato il container, riavviare Pi nel repository oppure usare `/reload` dopo aver approvato il progetto (`pi --approve`). L'estensione legge `ACTUAL_MCP_URL` e `ACTUAL_MCP_TOKEN` dall'ambiente o dal file locale `.env`, scopre gli strumenti MCP e li rende disponibili al modello tramite il tool `actual_budget`. Se la connessione fallisce il tool mostra l'errore senza esporre il token.
+
 ## Endpoints
 
 | Route | Purpose |

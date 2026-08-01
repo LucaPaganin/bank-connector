@@ -50,7 +50,15 @@ SSL_KEY_FILE = _env_path("SSL_KEY_FILE", ROOT / "sukuna.cormorant-bleak.ts.net.k
 EB_API = _env_str("EB_API", "https://api.enablebanking.com")
 HOST = _env_str("HOST", "0.0.0.0")
 PORT = _env_int("PORT", 3000)
-SYNC_INTERVAL_HOURS = _env_int("SYNC_INTERVAL_HOURS", 24)
+SYNC_INTERVAL_HOURS = _env_int("SYNC_INTERVAL_HOURS", 6)
+# Shared secret for operational endpoints. Set this in the container environment.
+SYNC_TOKEN = _env_str("SYNC_TOKEN", "")
+# Actual credentials can be supplied by Docker secrets/environment instead of JSON.
+ACTUAL_URL = _env_str("ACTUAL_URL", "")
+ACTUAL_PASSWORD = _env_str("ACTUAL_PASSWORD", "")
+ACTUAL_ENCRYPTION_PASSWORD = _env_str("ACTUAL_ENCRYPTION_PASSWORD", "")
+APPLICATION_ID = _env_str("APPLICATION_ID", "")
+REDIRECT_URL = _env_str("REDIRECT_URL", "")
 # Set BANK_CONN_SYNC_ENABLED=1 to enable the background auto-sync scheduler;
 # off by default so the app can be used purely for CSV export without an Actual
 # Budget instance. Manual POST /sync is unaffected by this flag.

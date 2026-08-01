@@ -18,6 +18,10 @@ from bank_connector.settings import EB_API
 log = logging.getLogger("connector")
 
 
+class ConsentExpiredError(RuntimeError):
+    """Enable Banking rejected a request because the consent/session expired."""
+
+
 class EnableBankingClient:
     def __init__(
         self,
@@ -115,6 +119,10 @@ class EnableBankingClient:
                     time.sleep(wait)
                     continue
                 break
+            if r.status_code in (401, 403):
+                raise ConsentExpiredError(
+                    "Enable Banking consent is expired or no longer valid"
+                )
             r.raise_for_status()
             data = r.json()
             txns.extend(data.get("transactions", []))
@@ -124,5 +132,5 @@ class EnableBankingClient:
             )
             params = {"continuation_key": ck} if ck else {}
             page += 1
-        log.info("Fetched %d transactions for %s", len(txns), account_uid)
+        log.info("Fetched %d transactions for account=%s", len(txns), account_uid)
         return txns

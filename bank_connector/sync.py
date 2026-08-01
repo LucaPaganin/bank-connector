@@ -17,7 +17,7 @@ from bank_connector.actual_patches import (
     fix_rule_note_casing,
     patch_payee_name_rules,
 )
-from bank_connector.enable_banking import EnableBankingClient
+from bank_connector.enable_banking import ConsentExpiredError, EnableBankingClient
 from bank_connector.parsing import (
     ParsedTransaction,
     parse_own_names,
@@ -77,8 +77,12 @@ class AccountSyncer:
 
         raw = self._eb.fetch_transactions(account_uid, date_from)
         if not raw:
-            log.info("%s: no new transactions", label)
+            log.info("sync account=%s result=ok imported=0", account_id)
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
             acct_state["last_sync_date"] = datetime.date.today().isoformat()
+            acct_state["last_sync_succeeded_at"] = now
+            acct_state["status"] = "ok"
+            acct_state.pop("error", None)
             accounts_state[account_id] = acct_state
             return 0
 
@@ -144,9 +148,13 @@ class AccountSyncer:
             actual.commit()
 
         log.info(
-            "%s: %d added, %d confirmed, %d skipped", label, added, updated, skipped
+            "sync account=%s result=ok added=%d confirmed=%d skipped=%d",
+            account_id, added, updated, skipped,
         )
         acct_state["last_sync_date"] = datetime.date.today().isoformat()
+        acct_state["last_sync_succeeded_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+        acct_state["status"] = "ok"
+        acct_state.pop("error", None)
         acct_state["pending_map"] = pending_map
         acct_state["imported_refs"] = list(imported_refs)
         accounts_state[account_id] = acct_state
@@ -319,6 +327,7 @@ class SyncService:
         state_repo: StateRepository,
         actual_data_dir: Path,
         interval_hours: int = SYNC_INTERVAL_HOURS,
+        actual_overrides: dict | None = None,
     ) -> None:
         self._cfg_repo = config_repo
         self._state_repo = state_repo
@@ -326,7 +335,12 @@ class SyncService:
             eb_client=eb_client, actual_data_dir=actual_data_dir
         )
         self._interval_hours = interval_hours
+        self._actual_overrides = actual_overrides or {}
         self._lock = threading.Lock()
+
+    @property
+    def interval_hours(self) -> int:
+        return self._interval_hours
 
     def run(self) -> int:
         if not self._lock.acquire(blocking=False):
@@ -342,12 +356,23 @@ class SyncService:
                 if i > 0:
                     time.sleep(2)
                 try:
-                    total += self._syncer.sync(acct, state, cfg["actual"], own_names)
-                except Exception as e:
-                    log.error(
-                        "Sync failed for %s: %s", acct.get("bank_name", "?"), e
+                    actual_cfg = {**cfg["actual"], **self._actual_overrides}
+                    total += self._syncer.sync(acct, state, actual_cfg, own_names)
+                except ConsentExpiredError as e:
+                    account_id = str(acct.get("id"))
+                    state.setdefault("accounts", {}).setdefault(account_id, {})
+                    state["accounts"][account_id].update(
+                        {"status": "reauthorization_required", "error": str(e)}
                     )
-            state["last_run"] = datetime.datetime.now().isoformat(timespec="seconds")
+                    log.error("sync account=%s result=reauthorization_required", account_id)
+                except Exception as e:
+                    account_id = str(acct.get("id"))
+                    state.setdefault("accounts", {}).setdefault(account_id, {})
+                    state["accounts"][account_id].update(
+                        {"status": "error", "error": str(e)[:500]}
+                    )
+                    log.error("sync account=%s result=error error=%s", account_id, e)
+            state["last_run"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
             self._state_repo.save(state)
             log.info("Sync finished. Total imported: %d", total)
             return total

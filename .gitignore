@@ -4,6 +4,7 @@ mytest*
 sukuna*.crt
 sukuna*.key
 actual-cache
+node_modules
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
