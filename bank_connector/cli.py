@@ -91,11 +91,14 @@ def main() -> None:
         eb_client=eb_client,
         sync_service=sync_service,
     )
-    app.run(
-        host=HOST, 
-        port=PORT,
-        ssl_context=(SSL_CRT_FILE, SSL_KEY_FILE)
+    # TLS is normally terminated by the reverse proxy.  Only enable Flask TLS
+    # when both certificate paths are explicitly available.
+    ssl_context = (
+        (SSL_CRT_FILE, SSL_KEY_FILE)
+        if SSL_CRT_FILE.is_file() and SSL_KEY_FILE.is_file()
+        else None
     )
+    app.run(host=HOST, port=PORT, ssl_context=ssl_context)
 
 
 if __name__ == "__main__":

@@ -2,56 +2,64 @@ services:
   actual:
     image: actualbudget/actual-server:latest
     container_name: actual-server
+    restart: unless-stopped
+    ports:
+      - "${ACTUAL_BIND_ADDRESS:-127.0.0.1}:5006:5006"
     volumes:
       - actual-data:/data
-    restart: unless-stopped
     networks:
       - actual_internal
 
-  actual-mcp:
-    image: sstefanov/actual-mcp:1.11.3
-    container_name: actual-mcp
-    restart: unless-stopped
-    command: ["--sse", "--port", "3001", "--enable-bearer"]
-    ports:
-      - "127.0.0.1:3001:3001"
-    environment:
-      ACTUAL_SERVER_URL: "http://192.168.1.148:5006"
-      ACTUAL_PASSWORD: "${ACTUAL_PASSWORD:?set Actual password}"
-      ACTUAL_BUDGET_ENCRYPTION_PASSWORD: "${ACTUAL_ENCRYPTION_PASSWORD:-}"
-      ACTUAL_BUDGET_SYNC_ID: "${ACTUAL_BUDGET_SYNC_ID:?set Actual budget sync id}"
-      BEARER_TOKEN: "${ACTUAL_MCP_TOKEN:?set a long random MCP token}"
-    networks:
-      - mcp_network
-
   bank-connector:
-    build: .
+    build:
+      context: .
     container_name: bank-connector
     restart: unless-stopped
-    # Only the NAS itself exposes this port. Publish it through Tailscale/UGOS
-    # if needed; there is intentionally no public port forwarding.
+    init: true
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "127.0.0.1:3000:3000"
+      - "${BANK_CONN_BIND_ADDRESS:-127.0.0.1}:3000:3000"
     environment:
       BANK_CONN_HOST: 0.0.0.0
       BANK_CONN_PORT: "3000"
       BANK_CONN_SYNC_ENABLED: "1"
       BANK_CONN_SYNC_INTERVAL_HOURS: "6"
-      BANK_CONN_SYNC_TOKEN: "${BANK_CONN_SYNC_TOKEN:?set a long random secret}"
-      BANK_CONN_ACTUAL_URL: http://actual-server:5006
-      BANK_CONN_ACTUAL_PASSWORD: "${ACTUAL_PASSWORD:?set Actual password}"
+      BANK_CONN_SYNC_TOKEN: "${BANK_CONN_SYNC_TOKEN:?set a long random secret in .env}"
+      BANK_CONN_ACTUAL_URL: http://actual:5006
+      BANK_CONN_ACTUAL_PASSWORD: "${ACTUAL_PASSWORD:?set the Actual password in .env}"
       BANK_CONN_ACTUAL_ENCRYPTION_PASSWORD: "${ACTUAL_ENCRYPTION_PASSWORD:-}"
-      BANK_CONN_APPLICATION_ID: "${ENABLE_BANKING_APPLICATION_ID:?set Enable Banking application id}"
+      BANK_CONN_APPLICATION_ID: "${ENABLE_BANKING_APPLICATION_ID:?set the Enable Banking application ID in .env}"
       BANK_CONN_PEM_PATH: /run/secrets/enable_banking_private_key
-      BANK_CONN_BASE_URL: "${BANK_CONN_BASE_URL:?set your Tailscale HTTPS URL}"
-      BANK_CONN_REDIRECT_URL: "${BANK_CONN_REDIRECT_URL:?set the registered OAuth callback URL}"
+      BANK_CONN_BASE_URL: "${BANK_CONN_BASE_URL:?set the public HTTPS URL in .env}"
+      BANK_CONN_REDIRECT_URL: "${BANK_CONN_REDIRECT_URL:?set the registered OAuth callback URL in .env}"
       BANK_CONN_STATE_FILE: /data/state.json
       BANK_CONN_CONFIG_FILE: /config/accounts.json
       BANK_CONN_ACTUAL_DATA_DIR: /data/actual-cache
     volumes:
       - bank-state:/data
-      - ./accounts.json:/config/accounts.json:ro
+      # Must be writable: /callback saves newly authorized bank accounts here.
+      - ./accounts.json:/config/accounts.json
       - ./private.pem:/run/secrets/enable_banking_private_key:ro
+    networks:
+      - actual_internal
+    depends_on:
+      - actual
+
+  actual-mcp:
+    image: sstefanov/actual-mcp:1.11.3
+    container_name: actual-mcp
+    profiles: ["mcp"]
+    restart: unless-stopped
+    command: ["--sse", "--port", "3001", "--enable-bearer"]
+    ports:
+      - "127.0.0.1:3001:3001"
+    environment:
+      ACTUAL_SERVER_URL: http://actual:5006
+      ACTUAL_PASSWORD: "${ACTUAL_PASSWORD:-}"
+      ACTUAL_BUDGET_ENCRYPTION_PASSWORD: "${ACTUAL_ENCRYPTION_PASSWORD:-}"
+      ACTUAL_BUDGET_SYNC_ID: "${ACTUAL_BUDGET_SYNC_ID:-}"
+      BEARER_TOKEN: "${ACTUAL_MCP_TOKEN:-}"
     networks:
       - actual_internal
     depends_on:
@@ -65,5 +73,3 @@ networks:
   actual_internal:
     driver: bridge
     internal: true
-  mcp_network:
-    driver: bridge

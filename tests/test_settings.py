@@ -33,7 +33,7 @@ def test_defaults_unchanged_without_env(monkeypatch, fresh_settings):
     assert s.PORT == 3000
     assert s.HOST == "0.0.0.0"
     assert s.SYNC_ENABLED is False
-    assert s.SYNC_INTERVAL_HOURS == 24
+    assert s.SYNC_INTERVAL_HOURS == 6
     assert s.EB_API == "https://api.enablebanking.com"
     assert s.default_redirect_url().endswith(":3000/callback")
 
