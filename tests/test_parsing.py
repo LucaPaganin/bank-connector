@@ -177,3 +177,13 @@ def test_key_is_date_pipe_amount():
         status="BOOK",
     )
     assert p.key == "2026-05-01|-9.99"
+
+
+def test_transaction_keeps_all_bank_identifiers_for_deduplication():
+    parsed = parse_transaction(
+        raw_txn(entry_reference="entry-123", transaction_id="transaction-456"),
+        frozenset(),
+    )
+
+    assert parsed.ref == "entry-123"
+    assert parsed.identifiers == frozenset({"entry-123", "transaction-456"})

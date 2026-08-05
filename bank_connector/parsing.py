@@ -6,7 +6,7 @@ doesn't need to know about config.
 import datetime
 import decimal
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel
@@ -84,6 +84,9 @@ class ParsedTransaction:
     notes: str
     ref: str
     status: str  # "BOOK" or "PDNG"
+    # Enable Banking can return both entry_reference and transaction_id. Keep
+    # both so either identifier can protect a re-run from duplicate imports.
+    identifiers: frozenset[str] = field(default_factory=frozenset)
 
     @property
     def key(self) -> str:
@@ -106,6 +109,9 @@ def parse_transaction(t: dict, own_names: frozenset[str], bank_name: str = "") -
         notes=notes,
         ref=txn.entry_reference or txn.transaction_id or "",
         status=txn.status,
+        identifiers=frozenset(
+            value for value in (txn.entry_reference, txn.transaction_id) if value
+        ),
     )
 
 

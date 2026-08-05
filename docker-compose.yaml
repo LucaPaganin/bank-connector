@@ -1,15 +1,4 @@
 services:
-  actual:
-    image: actualbudget/actual-server:latest
-    container_name: actual-server
-    restart: unless-stopped
-    ports:
-      - "${ACTUAL_BIND_ADDRESS:-127.0.0.1}:5006:5006"
-    volumes:
-      - actual-data:/data
-    networks:
-      - actual_internal
-
   bank-connector:
     build:
       context: .
@@ -20,13 +9,19 @@ services:
       - no-new-privileges:true
     ports:
       - "${BANK_CONN_BIND_ADDRESS:-127.0.0.1}:3000:3000"
+    extra_hosts:
+      # Tailscale DNS is not available inside Docker's default bridge network.
+      # Preserve the TLS hostname while routing it to this NAS host gateway.
+      - "${ACTUAL_HOSTNAME:?set the Actual TLS hostname in .env}:host-gateway"
     environment:
       BANK_CONN_HOST: 0.0.0.0
       BANK_CONN_PORT: "3000"
       BANK_CONN_SYNC_ENABLED: "1"
       BANK_CONN_SYNC_INTERVAL_HOURS: "6"
       BANK_CONN_SYNC_TOKEN: "${BANK_CONN_SYNC_TOKEN:?set a long random secret in .env}"
-      BANK_CONN_ACTUAL_URL: http://actual:5006
+      # Actual Budget already runs on the NAS with HTTPS. Keep it external;
+      # do not create a second, empty Actual instance in this project.
+      BANK_CONN_ACTUAL_URL: "${ACTUAL_URL:?set the existing Actual HTTPS URL in .env}"
       BANK_CONN_ACTUAL_PASSWORD: "${ACTUAL_PASSWORD:?set the Actual password in .env}"
       BANK_CONN_ACTUAL_ENCRYPTION_PASSWORD: "${ACTUAL_ENCRYPTION_PASSWORD:-}"
       BANK_CONN_APPLICATION_ID: "${ENABLE_BANKING_APPLICATION_ID:?set the Enable Banking application ID in .env}"
@@ -41,11 +36,8 @@ services:
       # Must be writable: /callback saves newly authorized bank accounts here.
       - ./accounts.json:/config/accounts.json
       - ./private.pem:/run/secrets/enable_banking_private_key:ro
-    networks:
-      - actual_internal
-    depends_on:
-      - actual
 
+  # Optional, read-only-by-default MCP bridge to the existing Actual server.
   actual-mcp:
     image: sstefanov/actual-mcp:1.11.3
     container_name: actual-mcp
@@ -54,22 +46,14 @@ services:
     command: ["--sse", "--port", "3001", "--enable-bearer"]
     ports:
       - "127.0.0.1:3001:3001"
+    extra_hosts:
+      - "${ACTUAL_HOSTNAME:?set the Actual TLS hostname in .env}:host-gateway"
     environment:
-      ACTUAL_SERVER_URL: http://actual:5006
-      ACTUAL_PASSWORD: "${ACTUAL_PASSWORD:-}"
+      ACTUAL_SERVER_URL: "${ACTUAL_URL:?set the existing Actual HTTPS URL in .env}"
+      ACTUAL_PASSWORD: "${ACTUAL_PASSWORD:?set the Actual password in .env}"
       ACTUAL_BUDGET_ENCRYPTION_PASSWORD: "${ACTUAL_ENCRYPTION_PASSWORD:-}"
       ACTUAL_BUDGET_SYNC_ID: "${ACTUAL_BUDGET_SYNC_ID:-}"
       BEARER_TOKEN: "${ACTUAL_MCP_TOKEN:-}"
-    networks:
-      - actual_internal
-    depends_on:
-      - actual
 
 volumes:
-  actual-data:
   bank-state:
-
-networks:
-  actual_internal:
-    driver: bridge
-    internal: true

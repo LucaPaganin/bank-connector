@@ -60,13 +60,8 @@ class AccountSyncer:
 
         accounts_state = state.setdefault("accounts", {})
         acct_state = accounts_state.get(account_id, {})
-
-        last = acct_state.get("last_sync_date") or account.get("start_sync_date")
-        date_from = (
-            datetime.date.fromisoformat(last)
-            if last
-            else (datetime.date.today() - datetime.timedelta(days=30))
-        )
+        cursor_date = self._sync_window_start(account, state)
+        date_from = cursor_date
 
         pending_map = acct_state.get("pending_map", {})
         if pending_map:
@@ -79,7 +74,6 @@ class AccountSyncer:
         if not raw:
             log.info("sync account=%s result=ok imported=0", account_id)
             now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-            acct_state["last_sync_date"] = datetime.date.today().isoformat()
             acct_state["last_sync_succeeded_at"] = now
             acct_state["status"] = "ok"
             acct_state.pop("error", None)
@@ -99,6 +93,13 @@ class AccountSyncer:
         ) as actual:
             account_obj = get_or_create_account(actual.session, actual_name)
             existing = list(get_transactions(actual.session, account=account_obj))
+            # Restore ID-based deduplication from Actual itself. This keeps a
+            # replaced/lost state.json from causing duplicate imports.
+            imported_refs.update(
+                txn.financial_id
+                for txn in existing
+                if getattr(txn, "financial_id", None)
+            )
             # actualpy treats already_matched as an EXCLUSION list for fuzzy
             # matching. It must start empty and grow per matched/created txn
             # during this run; seeding it with `existing` would hide every
@@ -106,6 +107,7 @@ class AccountSyncer:
             # booked transactions as duplicates on each sync.
             already_matched: list = []
             new_txn = []
+            processed_transactions: list[ParsedTransaction] = []
 
             bank_name = account.get("bank_name", "")
             for raw_txn in raw:
@@ -132,6 +134,7 @@ class AccountSyncer:
                     log.warning("Skipping txn (%s)", e)
                     continue
 
+                processed_transactions.append(parsed)
                 if outcome.added_txn is not None:
                     new_txn.append(outcome.added_txn)
                 added += outcome.added
@@ -147,6 +150,13 @@ class AccountSyncer:
 
             actual.commit()
 
+        latest_booked_date = self._latest_booked_date(processed_transactions)
+        if latest_booked_date:
+            latest_booked_date = max(cursor_date, latest_booked_date)
+            acct_state["latest_booked_date"] = latest_booked_date.isoformat()
+            # Retain the historical key for external consumers of state.json.
+            acct_state["last_sync_date"] = latest_booked_date.isoformat()
+
         log.info(
             "sync account=%s result=ok added=%d confirmed=%d skipped=%d",
             account_id, added, updated, skipped,
@@ -159,6 +169,30 @@ class AccountSyncer:
         acct_state["imported_refs"] = list(imported_refs)
         accounts_state[account_id] = acct_state
         return added
+
+    def _sync_window_start(self, account: dict, state: dict) -> datetime.date:
+        """Return the inclusive cursor for one bank account.
+
+        The cursor is the booking date of the newest successfully processed
+        booked transaction, not the date of the last execution. Re-fetching
+        that date is deliberate: it catches multiple same-day bookings while
+        identifier-based deduplication prevents duplicate imports.
+        """
+        account_id = str(account["id"])
+        acct_state = state.get("accounts", {}).get(account_id, {})
+        cursor = acct_state.get("latest_booked_date") or account.get(
+            "start_sync_date"
+        )
+        if cursor:
+            return datetime.date.fromisoformat(cursor)
+        return datetime.date.today() - datetime.timedelta(days=30)
+
+    @staticmethod
+    def _latest_booked_date(
+        transactions: list[ParsedTransaction],
+    ) -> datetime.date | None:
+        booked_dates = [txn.date for txn in transactions if txn.status == "BOOK"]
+        return max(booked_dates) if booked_dates else None
 
     def _import_one(
         self,
@@ -255,7 +289,10 @@ class AccountSyncer:
         reconcile,
         create,
     ) -> "_ImportOutcome":
-        if parsed.ref and parsed.ref in imported_refs:
+        identifiers = parsed.identifiers or frozenset(
+            {parsed.ref} if parsed.ref else ()
+        )
+        if identifiers & imported_refs:
             return _ImportOutcome(skipped=1)
 
         # Pending -> booked: mark cleared, drop from pending_map.
@@ -267,8 +304,7 @@ class AccountSyncer:
                 existing_txn.cleared = True
                 outcome.updated = 1
             del pending_map[parsed.key]
-            if parsed.ref:
-                imported_refs.add(parsed.ref)
+            imported_refs.update(identifiers)
             return outcome
 
         try:
@@ -297,9 +333,11 @@ class AccountSyncer:
                 imported_payee=parsed.payee,
             )
         already_matched.append(t)
+        # Record identifiers even if Actual matched an existing transaction.
+        # This makes the next run fast and prevents duplicate imports should
+        # the provider replay the same inclusive cursor date.
+        imported_refs.update(identifiers)
         if t.changed():
-            if parsed.ref:
-                imported_refs.add(parsed.ref)
             return _ImportOutcome(added=1, added_txn=t)
         return _ImportOutcome(skipped=1)
 

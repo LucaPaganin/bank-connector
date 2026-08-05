@@ -86,7 +86,7 @@ To find supported banks: `GET /banks` returns the full list of names and country
 
 ## Server deployment (Docker)
 
-The supplied Compose stack runs Actual Budget and the connector. Both ports are bound to loopback by default (`127.0.0.1:5006` and `127.0.0.1:3000`), so they are not exposed to the LAN or Internet. Publish the connector through a TLS-terminating reverse proxy or Tailscale Serve/Funnel as appropriate; register that public HTTPS address plus `/callback` in Enable Banking.
+The supplied Compose stack runs the connector against the existing Actual Budget server on the NAS; it deliberately does **not** create a second, empty Actual instance. The connector publishes port `3000` on loopback (`127.0.0.1`) by default, so it is not exposed to the LAN or Internet. Publish it through a TLS-terminating reverse proxy or Tailscale Serve/Funnel as appropriate; register that public HTTPS address plus `/callback` in Enable Banking.
 
 The connector runs as non-root UID `10001`. Its account configuration is intentionally writable because the OAuth callback appends newly authorized accounts; its state and Actual cache are persisted in named volumes. TLS is normally terminated by the proxy—the Flask process automatically uses TLS only if both configured certificate files exist.
 

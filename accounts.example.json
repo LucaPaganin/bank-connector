@@ -1,26 +1,13 @@
 {
   "application_id": "your-enable-banking-application-uuid",
   "pem_path": "./private.pem",
-  "redirect_url": "http://localhost:3000/callback",
+  "redirect_url": "https://your-public-host.example/callback",
   "account_holder_name": "Your Name",
   "actual": {
-    "url": "http://localhost:5006",
+    "url": "https://your-actual-server.example:5006",
     "password": "your-actual-budget-password",
     "encryption_password": null,
     "sync_id": "your-budget-sync-id"
   },
-  "accounts": [
-    {
-      "id": 1,
-      "session_id": "",
-      "account_uid": "",
-      "bank_name": "Revolut",
-      "country": "IT",
-      "actual_account": "test",
-      "start_sync_date": "2026-05-04",
-      "session_expiry": "2026-10-31T20:42:38Z",
-      "skip_pending": false,
-      "notes": ""
-    }
-  ]
+  "accounts": []
 }

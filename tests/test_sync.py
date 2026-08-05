@@ -1,13 +1,15 @@
 """Dedup core (no actualpy) + SyncService orchestration."""
 import datetime
 import decimal
+import sys
+from types import ModuleType
 from unittest.mock import MagicMock
 
 import pytest
 
 from bank_connector.parsing import ParsedTransaction
 from bank_connector.sync import AccountSyncer, SyncService
-from helpers import FakeTxn, RecordingImporter
+from helpers import FakeTxn, RecordingImporter, raw_txn
 
 
 def _parsed(status="BOOK", ref="ref-1", amount="-10.00"):
@@ -24,6 +26,72 @@ def _parsed(status="BOOK", ref="ref-1", amount="-10.00"):
 @pytest.fixture
 def syncer(tmp_path):
     return AccountSyncer(eb_client=MagicMock(), actual_data_dir=tmp_path)
+
+
+def test_sync_window_starts_at_latest_booked_transaction(syncer):
+    account = {"id": 1, "start_sync_date": "2026-01-01"}
+    state = {"accounts": {"1": {"latest_booked_date": "2026-05-10"}}}
+
+    assert syncer._sync_window_start(account, state) == datetime.date(2026, 5, 10)
+
+
+def test_latest_booked_date_ignores_pending_and_uses_newest_booking(syncer):
+    pending = _parsed(status="PDNG")
+    old_booked = _parsed(status="BOOK")
+    newest_booked = ParsedTransaction(
+        date=datetime.date(2026, 5, 3),
+        amount=decimal.Decimal("-10.00"),
+        payee="Shop",
+        notes="n",
+        ref="newest",
+        status="BOOK",
+    )
+
+    assert syncer._latest_booked_date([pending, old_booked, newest_booked]) == datetime.date(
+        2026, 5, 3
+    )
+
+
+def test_failed_import_does_not_advance_incremental_cursor(syncer, monkeypatch):
+    class FakeActual:
+        def __init__(self, **_kwargs):
+            self.session = MagicMock()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def run_rules(self, _transactions):
+            return None
+
+        def commit(self):
+            return None
+
+    actual_module = ModuleType("actual")
+    actual_module.Actual = FakeActual
+    queries_module = ModuleType("actual.queries")
+    queries_module.create_transaction = MagicMock()
+    queries_module.get_or_create_account = MagicMock(return_value=MagicMock())
+    queries_module.get_transactions = MagicMock(return_value=[])
+    queries_module.reconcile_transaction = MagicMock()
+    monkeypatch.setitem(sys.modules, "actual", actual_module)
+    monkeypatch.setitem(sys.modules, "actual.queries", queries_module)
+
+    syncer._eb.fetch_transactions.return_value = [
+        raw_txn(booking_date="2026-05-10", entry_reference="bank-id")
+    ]
+    monkeypatch.setattr(syncer, "_import_one", MagicMock(side_effect=RuntimeError("boom")))
+    state = {"accounts": {}}
+
+    assert syncer.sync(
+        {"id": 1, "account_uid": "bank", "actual_account": "Main"},
+        state,
+        {"url": "https://actual.example", "password": "p", "sync_id": "s"},
+        frozenset(),
+    ) == 0
+    assert "latest_booked_date" not in state["accounts"]["1"]
 
 
 def _import(syncer, parsed, **kw):
@@ -51,6 +119,29 @@ def test_booked_skipped_when_ref_already_imported(syncer):
         syncer, _parsed(ref="seen"), imported_refs={"seen"}, reconcile=rec
     )
     assert out.skipped == 1 and out.added == 0
+    assert rec.calls == []
+
+
+def test_booked_skipped_when_any_bank_identifier_was_imported(syncer):
+    parsed = ParsedTransaction(
+        date=datetime.date(2026, 5, 1),
+        amount=decimal.Decimal("-10.00"),
+        payee="Shop",
+        notes="n",
+        ref="entry-id",
+        status="BOOK",
+        identifiers=frozenset({"entry-id", "transaction-id"}),
+    )
+    rec = RecordingImporter()
+
+    _, out = _import(
+        syncer,
+        parsed,
+        imported_refs={"transaction-id"},
+        reconcile=rec,
+    )
+
+    assert out.skipped == 1
     assert rec.calls == []
 
 
