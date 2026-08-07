@@ -101,36 +101,57 @@ class EnableBankingClient:
         date_to: datetime.date | None = None,
     ) -> list[dict]:
         headers = self._headers()
-        params = {
-            "date_from": date_from.isoformat(),
-            "date_to": (date_to or datetime.date.today()).isoformat(),
-        }
+        end_date = date_to or datetime.date.today()
         url = f"{self.api_url}/accounts/{account_uid}/transactions"
         txns: list[dict] = []
-        page = 0
-        while url:
-            if page > 0:
-                time.sleep(1)
-            for attempt in range(4):
-                r = requests.get(url, headers=headers, params=params, timeout=self.timeout)
-                if r.status_code == 429:
-                    wait = min(2**attempt * 5, 60)
-                    log.warning("Rate limited (429), retrying in %ds", wait)
-                    time.sleep(wait)
-                    continue
-                break
-            if r.status_code in (401, 403):
-                raise ConsentExpiredError(
-                    "Enable Banking consent is expired or no longer valid"
-                )
-            r.raise_for_status()
-            data = r.json()
-            txns.extend(data.get("transactions", []))
-            ck = data.get("continuation_key")
-            url = (
-                f"{self.api_url}/accounts/{account_uid}/transactions" if ck else None
-            )
-            params = {"continuation_key": ck} if ck else {}
-            page += 1
+        window_start = date_from
+
+        # Some banks reject broad transaction ranges; keep every provider query
+        # to 30 inclusive calendar days. A continuation key remains valid only
+        # when the original date parameters are repeated on every page.
+        while window_start <= end_date:
+            window_end = min(window_start + datetime.timedelta(days=29), end_date)
+            period_params = {
+                "date_from": window_start.isoformat(),
+                "date_to": window_end.isoformat(),
+            }
+            continuation_key = None
+            page = 0
+
+            while True:
+                if page > 0:
+                    time.sleep(1)
+                params = {
+                    **period_params,
+                    **(
+                        {"continuation_key": continuation_key}
+                        if continuation_key
+                        else {}
+                    ),
+                }
+                r = None
+                for attempt in range(4):
+                    r = requests.get(url, headers=headers, params=params, timeout=self.timeout)
+                    if r.status_code == 429:
+                        wait = min(2**attempt * 5, 60)
+                        log.warning("Rate limited (429), retrying in %ds", wait)
+                        time.sleep(wait)
+                        continue
+                    break
+                assert r is not None
+                if r.status_code in (401, 403):
+                    raise ConsentExpiredError(
+                        "Enable Banking consent is expired or no longer valid"
+                    )
+                r.raise_for_status()
+                data = r.json()
+                txns.extend(data.get("transactions", []))
+                continuation_key = data.get("continuation_key")
+                if not continuation_key:
+                    break
+                page += 1
+
+            window_start = window_end + datetime.timedelta(days=1)
+
         log.info("Fetched %d transactions for account=%s", len(txns), account_uid)
         return txns

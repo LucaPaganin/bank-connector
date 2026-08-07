@@ -24,3 +24,13 @@ def test_main_uses_plain_http_when_tls_files_are_not_present(monkeypatch, tmp_pa
     cli.main()
 
     assert app.run.call_args.kwargs["ssl_context"] is None
+
+
+def test_main_delegates_setup_subcommands_to_terminal_assistant(monkeypatch):
+    import bank_connector.cli as cli
+
+    invoked = MagicMock(return_value=7)
+    monkeypatch.setattr(cli, "run_setup_cli", invoked)
+
+    assert cli.main(["validate"]) == 7
+    invoked.assert_called_once_with(["validate"], root=cli.ROOT)

@@ -9,12 +9,14 @@ import sys
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from bank_connector.enable_banking import EnableBankingClient
+from bank_connector.setup_cli import run_cli as run_setup_cli
 from bank_connector.settings import (
     ACTUAL_DATA_DIR,
     CONFIG_FILE,
     HOST,
     PEM_DEFAULT,
     PORT,
+    ROOT,
     STATE_FILE,
     SSL_CRT_FILE,
     SSL_KEY_FILE,
@@ -34,7 +36,10 @@ from bank_connector.web import create_app
 log = logging.getLogger("connector")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int | None:
+    if argv:
+        return run_setup_cli(argv, root=ROOT)
+
     if not CONFIG_FILE.exists():
         log.error(
             "Missing %s - copy accounts.example.json and fill in your details.",

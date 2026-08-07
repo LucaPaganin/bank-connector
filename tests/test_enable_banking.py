@@ -1,5 +1,7 @@
 """EnableBankingClient with HTTP mocked via `responses`."""
+import datetime
 import json
+from urllib.parse import parse_qs, urlparse
 
 import jwt as pyjwt
 import pytest
@@ -75,7 +77,7 @@ def test_list_banks_maps_fields(client):
 
 
 @responses.activate
-def test_fetch_transactions_paginates(client, monkeypatch):
+def test_fetch_transactions_paginates_and_splits_into_30_day_windows(client, monkeypatch):
     import bank_connector.enable_banking as eb
 
     monkeypatch.setattr(eb.time, "sleep", lambda *_: None)
@@ -89,10 +91,25 @@ def test_fetch_transactions_paginates(client, monkeypatch):
     responses.add(
         responses.GET, url, json={"transactions": [{"id": 2}]}, status=200
     )
-    import datetime
+    responses.add(
+        responses.GET, url, json={"transactions": [{"id": 3}]}, status=200
+    )
 
-    txns = client.fetch_transactions("uid-1", datetime.date(2026, 1, 1))
-    assert [t["id"] for t in txns] == [1, 2]
+    txns = client.fetch_transactions(
+        "uid-1", datetime.date(2026, 1, 1), datetime.date(2026, 2, 2)
+    )
+
+    assert [t["id"] for t in txns] == [1, 2, 3]
+    queries = [parse_qs(urlparse(call.request.url).query) for call in responses.calls]
+    assert queries == [
+        {"date_from": ["2026-01-01"], "date_to": ["2026-01-30"]},
+        {
+            "date_from": ["2026-01-01"],
+            "date_to": ["2026-01-30"],
+            "continuation_key": ["ck-1"],
+        },
+        {"date_from": ["2026-01-31"], "date_to": ["2026-02-02"]},
+    ]
 
 
 @responses.activate
@@ -103,7 +120,7 @@ def test_fetch_transactions_retries_on_429(client, monkeypatch):
     url = f"{API}/accounts/uid-1/transactions"
     responses.add(responses.GET, url, status=429)
     responses.add(responses.GET, url, json={"transactions": [{"id": 9}]}, status=200)
-    import datetime
-
-    txns = client.fetch_transactions("uid-1", datetime.date(2026, 1, 1))
+    txns = client.fetch_transactions(
+        "uid-1", datetime.date(2026, 1, 1), datetime.date(2026, 1, 1)
+    )
     assert [t["id"] for t in txns] == [9]

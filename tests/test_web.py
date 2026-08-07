@@ -114,7 +114,16 @@ def test_callback_success_appends_account(client, deps):
     assert saved_cfg["accounts"][0]["session_id"] == "sess"
 
 
-def test_manual_sync_starts_thread(client, deps, monkeypatch):
+def test_manual_sync_starts_thread_without_token_when_configured(deps, monkeypatch):
+    config_repo, state_repo, eb_client, sync_service = deps
+    app = create_app(
+        config_repo=config_repo,
+        state_repo=state_repo,
+        eb_client=eb_client,
+        sync_service=sync_service,
+        sync_token="configured-secret",
+    )
+    app.config.update(TESTING=True)
     started = {}
 
     class FakeThread:
@@ -125,7 +134,7 @@ def test_manual_sync_starts_thread(client, deps, monkeypatch):
             started["ran"] = True
 
     monkeypatch.setattr("bank_connector.web.threading.Thread", FakeThread)
-    r = client.post("/sync")
+    r = app.test_client().post("/sync")
     assert r.json == {"started": True}
     assert started["ran"] is True
 

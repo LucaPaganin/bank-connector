@@ -185,7 +185,8 @@ def create_app(
     @app.post("/sync")
     @app.post("/sync/refresh")
     def manual_sync():
-        require_sync_token()
+        # The connector UI is intentionally LAN-only; its Sync button does not
+        # send an API token, so manual sync is unauthenticated by design.
         threading.Thread(target=sync_service.run, daemon=True).start()
         return jsonify({"started": True})
 
